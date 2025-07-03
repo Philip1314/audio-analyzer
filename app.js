@@ -1,3 +1,14 @@
+function showFileName() {
+  const fileInput = document.getElementById("audioFile");
+  const fileNameDiv = document.getElementById("fileName");
+
+  if (fileInput.files.length > 0) {
+    fileNameDiv.textContent = `Selected: ${fileInput.files[0].name}`;
+  } else {
+    fileNameDiv.textContent = "No file selected.";
+  }
+}
+
 function rms(buffer) {
   let sum = 0;
   for (let i = 0; i < buffer.length; i++) {
@@ -15,7 +26,6 @@ function detectClipping(buffer) {
 }
 
 function analyzeFFT(buffer, sampleRate) {
-  const len = buffer.length;
   const win = buffer.slice(0, 16384);
   const spectrum = new Float32Array(win.length / 2);
 
@@ -66,18 +76,15 @@ function analyzeAudio() {
     const arrayBuffer = e.target.result;
 
     audioCtx.decodeAudioData(arrayBuffer, function (audioBuffer) {
-      const channelData = audioBuffer.getChannelData(0); // mono
-      const totalRMS = rms(channelData);
-      const dB = 20 * Math.log10(totalRMS + 1e-8);
+      const channelData = audioBuffer.getChannelData(0);
+      const dB = 20 * Math.log10(rms(channelData) + 1e-8);
       const clippingPct = detectClipping(channelData);
 
       const frameSize = Math.floor(audioCtx.sampleRate * 0.5);
       let silentFrames = 0, totalFrames = 0;
-
       for (let i = 0; i < channelData.length; i += frameSize) {
         const frame = channelData.slice(i, i + frameSize);
-        const frameRMS = rms(frame);
-        const frameDB = 20 * Math.log10(frameRMS + 1e-8);
+        const frameDB = 20 * Math.log10(rms(frame) + 1e-8);
         if (frameDB < -35) silentFrames++;
         totalFrames++;
       }
@@ -85,12 +92,11 @@ function analyzeAudio() {
       const silencePercent = (silentFrames / totalFrames) * 100;
       const noise = analyzeFFT(channelData, audioCtx.sampleRate);
 
-      const isPass = (
+      const isPass =
         dB >= -30 && dB <= -12 &&
         silencePercent <= 25 &&
         clippingPct < 1 &&
-        !noise.hasHum && !noise.hasBuzz && !noise.hasPlosive
-      );
+        !noise.hasHum && !noise.hasBuzz && !noise.hasPlosive;
 
       loadingDiv.classList.add("hidden");
       resultDiv.classList.remove("hidden");
