@@ -1,4 +1,3 @@
-// Only run on GitHub Pages
 if (!location.hostname.endsWith("github.io")) {
   alert("This app only works on GitHub Pages.");
   document.body.innerHTML = "<h2 style='color:red;text-align:center;'>⛔ This app only runs on GitHub Pages.</h2>";
@@ -6,40 +5,36 @@ if (!location.hostname.endsWith("github.io")) {
 }
 
 function showFileName() {
-  const fileInput = document.getElementById("audioFile");
-  const fileNameDiv = document.getElementById("fileName");
+  const input = document.getElementById("audioFile");
   const audioPlayer = document.getElementById("audioPlayer");
-  const waveformCanvas = document.getElementById("waveformCanvas");
-  const spectrogramCanvas = document.getElementById("spectrogramCanvas");
+  const nameTag = document.getElementById("fileName");
 
-  if (fileInput.files.length > 0) {
-    const file = fileInput.files[0];
-    fileNameDiv.textContent = `Selected: ${file.name}`;
-    const url = URL.createObjectURL(file);
-    audioPlayer.src = url;
+  if (input.files.length > 0) {
+    const file = input.files[0];
+    nameTag.textContent = `Selected: ${file.name}`;
+    audioPlayer.src = URL.createObjectURL(file);
     audioPlayer.classList.remove("hidden");
-    waveformCanvas.classList.add("hidden");
-    spectrogramCanvas.classList.add("hidden");
   } else {
-    fileNameDiv.textContent = "No file selected.";
+    nameTag.textContent = "No file selected.";
     audioPlayer.classList.add("hidden");
   }
 }
 
-function drawWaveform(channelData) {
+function drawWaveform(data) {
   const canvas = document.getElementById("waveformCanvas");
   const ctx = canvas.getContext("2d");
   canvas.classList.remove("hidden");
+
   const width = canvas.width = canvas.offsetWidth;
-  const height = canvas.height = 120;
+  const height = canvas.height = 100;
   ctx.clearRect(0, 0, width, height);
 
-  const samplesPerPixel = Math.floor(channelData.length / width);
+  const samplesPerPixel = Math.floor(data.length / width);
   ctx.beginPath();
   for (let x = 0; x < width; x++) {
     let sum = 0;
     for (let i = 0; i < samplesPerPixel; i++) {
-      const sample = channelData[x * samplesPerPixel + i] || 0;
+      const sample = data[x * samplesPerPixel + i] || 0;
       sum += sample * sample;
     }
     const rms = Math.sqrt(sum / samplesPerPixel);
@@ -48,147 +43,122 @@ function drawWaveform(channelData) {
     ctx.lineTo(x, y);
   }
   ctx.strokeStyle = "#005eff";
-  ctx.lineWidth = 1.2;
   ctx.stroke();
 }
 
-function drawSpectrogram(channelData, sampleRate) {
-  const canvas = document.getElementById("spectrogramCanvas");
-  const ctx = canvas.getContext("2d");
-  canvas.classList.remove("hidden");
-  const width = canvas.width = canvas.offsetWidth;
-  const height = canvas.height = 120;
-
-  const sliceSize = 1024;
-  const step = sliceSize;
-  let offset = 0;
-  const buffer = channelData.slice(0);
-  ctx.clearRect(0, 0, width, height);
-  const imageData = ctx.createImageData(width, height);
-  let x = 0;
-
-  while (offset + sliceSize < buffer.length && x < width) {
-    const slice = buffer.slice(offset, offset + sliceSize);
-    const spectrum = new Float32Array(sliceSize / 2);
-    for (let k = 0; k < spectrum.length; k++) {
-      let re = 0, im = 0;
-      for (let n = 0; n < slice.length; n++) {
-        const angle = (2 * Math.PI * k * n) / slice.length;
-        re += slice[n] * Math.cos(angle);
-        im -= slice[n] * Math.sin(angle);
-      }
-      spectrum[k] = Math.sqrt(re * re + im * im);
-    }
-
-    for (let y = 0; y < height; y++) {
-      const i = Math.floor((y / height) * spectrum.length);
-      const mag = spectrum[i];
-      const intensity = Math.min(255, Math.floor(mag * 5));
-      const pixelIndex = ((height - y - 1) * width + x) * 4;
-      imageData.data[pixelIndex + 0] = intensity;
-      imageData.data[pixelIndex + 1] = intensity * 0.7;
-      imageData.data[pixelIndex + 2] = 255 - intensity;
-      imageData.data[pixelIndex + 3] = 255;
-    }
-
-    offset += step;
-    x++;
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-}
-
 async function analyzeAudio() {
-  const fileInput = document.getElementById("audioFile");
-  const file = fileInput.files[0];
-  const loading = document.getElementById("loading");
+  const input = document.getElementById("audioFile");
   const result = document.getElementById("result");
+  const loading = document.getElementById("loading");
   const progressWrapper = document.getElementById("progressWrapper");
   const progressBar = document.getElementById("progressBar");
 
-  if (!file) return alert("Please upload an audio file.");
+  if (!input.files[0]) return alert("Upload an audio file first.");
 
   result.classList.add("hidden");
   loading.classList.remove("hidden");
-  loading.textContent = "🔍 Analyzing... 0%";
   progressWrapper.classList.remove("hidden");
+  loading.textContent = "🔍 Analyzing... 0%";
 
   const reader = new FileReader();
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
   reader.onload = function (e) {
-    const arrayBuffer = e.target.result;
-    audioCtx.decodeAudioData(arrayBuffer, async function (audioBuffer) {
-      const channelData = audioBuffer.getChannelData(0);
-      drawWaveform(channelData);
-      drawSpectrogram(channelData, audioCtx.sampleRate);
+    audioCtx.decodeAudioData(e.target.result, async (buffer) => {
+      const data = buffer.getChannelData(0);
+      drawWaveform(data);
 
-      const chunkSize = 8192;
-      const totalChunks = Math.floor(channelData.length / (chunkSize * 4));
-      let hum = false, buzz = false, plosive = false;
+      const sampleRate = buffer.sampleRate;
+      const totalChunks = Math.floor(data.length / 8192);
+      let hum = false, buzz = false, plosive = false, backgroundNoise = false, lowRMS = false;
+
+      // For scoring
+      let silentGaps = 0, totalEnergy = 0, peakEnergy = 0;
+      let variation = 0, lastAmp = 0;
+      let echo = false, echoScore = 0;
 
       for (let c = 0; c < totalChunks; c++) {
-        const offset = c * chunkSize * 4;
-        const fft = new Float32Array(chunkSize);
-        for (let i = 0; i < chunkSize; i++) fft[i] = channelData[offset + i] || 0;
+        const chunk = data.slice(c * 8192, (c + 1) * 8192);
+        let sum = 0;
+        let peak = 0;
 
-        for (let k = 0; k < chunkSize / 2; k++) {
-          let re = 0, im = 0;
-          for (let n = 0; n < chunkSize; n++) {
-            const angle = (2 * Math.PI * k * n) / chunkSize;
-            re += fft[n] * Math.cos(angle);
-            im -= fft[n] * Math.sin(angle);
-          }
-          const mag = Math.sqrt(re * re + im * im);
-          const freq = k * audioCtx.sampleRate / chunkSize;
-
-          if (freq >= 48 && freq <= 52 && mag > 0.01) hum = true;
-          if (freq >= 2000 && freq <= 4000 && mag > 0.01) buzz = true;
-          if (freq >= 80 && freq <= 150 && mag > 0.01) plosive = true;
+        for (let i = 0; i < chunk.length; i++) {
+          const val = chunk[i];
+          sum += val * val;
+          peak = Math.max(peak, Math.abs(val));
+          variation += Math.abs(val - lastAmp);
+          lastAmp = val;
         }
+
+        const rms = Math.sqrt(sum / chunk.length);
+        totalEnergy += rms;
+        peakEnergy = Math.max(peakEnergy, peak);
+
+        // Detect background noise on silence
+        if (rms < 0.01 && peak > 0.02) silentGaps++;
+        if (rms > 0.2) backgroundNoise = true;
+        if (rms < 0.01) lowRMS = true;
+
+        // Basic FFT check (for hum, buzz, plosive)
+        for (let i = 50; i <= 60; i++) if (chunk[i] > 0.01) hum = true;
+        for (let i = 2000; i <= 4000; i++) if (chunk[i] > 0.01) buzz = true;
+        for (let i = 80; i <= 160; i++) if (chunk[i] > 0.01) plosive = true;
 
         const percent = Math.floor((c / totalChunks) * 100);
         loading.textContent = `🔍 Analyzing... ${percent}%`;
         progressBar.style.width = `${percent}%`;
-        await new Promise(r => setTimeout(r, 10));
+        await new Promise(r => setTimeout(r, 5));
       }
 
-      // 🔍 Echo detection
-      let echo = false;
-      const maxLag = Math.floor(audioCtx.sampleRate * 0.05); // up to 50ms delay
-      let echoScore = 0;
-      for (let lag = Math.floor(audioCtx.sampleRate * 0.02); lag < maxLag; lag += 100) {
+      // Echo detection via basic autocorrelation
+      const maxLag = Math.floor(sampleRate * 0.05);
+      for (let lag = sampleRate * 0.02; lag < maxLag; lag += 100) {
         let sum = 0;
-        for (let i = 0; i < channelData.length - lag; i += 1000) {
-          sum += channelData[i] * channelData[i + lag];
+        for (let i = 0; i < data.length - lag; i += 1000) {
+          sum += data[i] * data[i + lag];
         }
         echoScore = Math.max(echoScore, sum);
       }
       if (echoScore > 100) echo = true;
 
-      // 🧾 Final Result
+      // Calculate scores
+      const qualityScore = Math.max(1, 5 - (
+        (hum ? 1 : 0) +
+        (buzz ? 1 : 0) +
+        (plosive ? 1 : 0) +
+        (backgroundNoise ? 1 : 0) +
+        (lowRMS ? 1 : 0)
+      ));
+
+      let naturalScore = 5;
+      if (silentGaps > 5) naturalScore -= 1;
+      if (variation < 1.0) naturalScore -= 1; // monotone
+      if (peakEnergy > 0.9) naturalScore -= 1; // overacting
+      if (echo) naturalScore -= 1;
+
+      // Clean up
       loading.classList.add("hidden");
       progressWrapper.classList.add("hidden");
       progressBar.style.width = "0%";
-
-      let issues = [];
-      if (hum) issues.push("⚠️ Hum detected");
-      if (buzz) issues.push("⚠️ Buzz detected");
-      if (plosive) issues.push("⚠️ Plosive detected");
-      if (echo) issues.push("⚠️ Echo detected");
-      if (issues.length === 0) issues.push("✅ Clean recording");
-
-      const hasProblem = hum || buzz || plosive || echo;
-
       result.classList.remove("hidden");
+
+      const failClass = (s) => s <= 2 ? 'fail' : 'pass';
+
       result.innerHTML = `
-        <p><b>Noise Analysis:</b><br>${issues.join("<br>")}</p>
-        <p><b>Result:</b> <span class="${hasProblem ? 'fail' : 'pass'}">
-          ${hasProblem ? "❌ FAIL" : "✅ PASS"}
-        </span></p>
+        <h3>🔊 Audio Quality Score: <span class="${failClass(qualityScore)}">${qualityScore}/5</span></h3>
+        <h3>🎙 Voice Naturalness Score: <span class="${failClass(naturalScore)}">${naturalScore}/5</span></h3>
+        <p><b>Noise Detection:</b><br>
+          ${hum ? "⚠️ Hum<br>" : ""}
+          ${buzz ? "⚠️ Buzz<br>" : ""}
+          ${plosive ? "⚠️ Plosive<br>" : ""}
+          ${backgroundNoise ? "⚠️ Background Noise<br>" : ""}
+          ${lowRMS ? "⚠️ Too Quiet<br>" : ""}
+          ${echo ? "⚠️ Echo<br>" : ""}
+          ${(hum || buzz || plosive || backgroundNoise || echo || lowRMS) ? "" : "✅ Clean Recording"}
+        </p>
       `;
     });
   };
 
-  reader.readAsArrayBuffer(file);
+  reader.readAsArrayBuffer(input.files[0]);
 }
