@@ -1,4 +1,4 @@
-// Only run on GitHub Pages
+// ✅ Allow only on GitHub Pages
 if (!location.hostname.endsWith("github.io")) {
   alert("This app only works on GitHub Pages.");
   document.body.innerHTML = "<h2 style='color:red;text-align:center;'>⛔ This app only runs on GitHub Pages.</h2>";
@@ -99,7 +99,7 @@ function drawSpectrogram(channelData, sampleRate) {
   ctx.putImageData(imageData, 0, 0);
 }
 
-function analyzeAudio() {
+async function analyzeAudio() {
   const fileInput = document.getElementById("audioFile");
   const file = fileInput.files[0];
   const loading = document.getElementById("loading");
@@ -109,21 +109,24 @@ function analyzeAudio() {
 
   result.classList.add("hidden");
   loading.classList.remove("hidden");
+  loading.textContent = "🔍 Analyzing... 0%";
 
   const reader = new FileReader();
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
   reader.onload = function (e) {
     const arrayBuffer = e.target.result;
-    audioCtx.decodeAudioData(arrayBuffer, function (audioBuffer) {
+    audioCtx.decodeAudioData(arrayBuffer, async function (audioBuffer) {
       const channelData = audioBuffer.getChannelData(0);
       drawWaveform(channelData);
       drawSpectrogram(channelData, audioCtx.sampleRate);
 
       const chunkSize = 8192;
+      const totalChunks = Math.floor(channelData.length / (chunkSize * 4));
       let hum = false, buzz = false, plosive = false;
 
-      for (let offset = 0; offset + chunkSize < channelData.length; offset += chunkSize * 4) {
+      for (let c = 0; c < totalChunks; c++) {
+        const offset = c * chunkSize * 4;
         const fft = new Float32Array(chunkSize);
         for (let i = 0; i < chunkSize; i++) fft[i] = channelData[offset + i] || 0;
 
@@ -141,6 +144,13 @@ function analyzeAudio() {
           if (freq >= 2000 && freq <= 4000 && mag > 0.01) buzz = true;
           if (freq >= 80 && freq <= 150 && mag > 0.01) plosive = true;
         }
+
+        // 🔄 Update progress
+        const percent = Math.floor((c / totalChunks) * 100);
+        loading.textContent = `🔍 Analyzing... ${percent}%`;
+
+        // Allow UI to update
+        await new Promise(r => setTimeout(r, 10));
       }
 
       let issues = [];
