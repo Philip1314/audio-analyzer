@@ -1,16 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Voice Audio Analyzer</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎧 Voice Audio Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>🎧 Voice Audio Analyzer</h1>
-  <input type="file" id="audioFile" accept="audio/*"><br><br>
-  <button onclick="analyzeAudio()">Analyze</button>
+  <main class="container">
+    <h1>🎧 Voice Audio Analyzer</h1>
 
-  <div id="result"></div>
+    <label class="file-label">
+      <input type="file" id="audioFile" accept="audio/*" />
+      <span>Select Audio File</span>
+    </label>
+
+    <button onclick="analyzeAudio()">Analyze</button>
+
+    <section id="result" class="result-card">
+      <p>📤 Upload a WAV or MP3 to get started.</p>
+    </section>
+  </main>
+
+  <footer>
+    <small>Built with ❤️ for browser-based voice QA</small>
+  </footer>
 
   <script src="app.js"></script>
 </body>
