@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Noise Analyzer</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Light gray background */
+        }
+        canvas {
+            display: block;
+            background-color: #1a202c; /* Dark background for canvas */
+            border-radius: 0.75rem; /* Rounded corners */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 sm:p-6 md:p-8">
+    <div class="bg-white p-6 sm:p-8 md:p-10 rounded-xl shadow-lg w-full max-w-2xl text-center">
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-6">Audio Noise Analyzer</h1>
+
+        <p class="text-gray-600 mb-6">
+            Click 'Start Analysis' to allow microphone access and begin analyzing background noise.
+            The analyzer will attempt to identify common issues like ground hum (50Hz/60Hz) or general vibrations.
+        </p>
+
+        <button id="toggleAnalysisBtn"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 mb-6">
+            Start Analysis
+        </button>
+
+        <div id="messageBox" class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-md mb-6 hidden" role="alert">
+            <p id="messageText"></p>
+        </div>
+
+        <div class="mb-6">
+            <h2 class="text-xl sm:text-2xl font-semibold text-gray-700 mb-3">Detected Noise:</h2>
+            <p id="noiseType" class="text-2xl sm:text-3xl font-extrabold text-indigo-700">None</p>
+            <p id="frequencyInfo" class="text-gray-500 text-sm mt-1"></p>
+        </div>
+
+        <canvas id="audioVisualizer" class="w-full h-48 sm:h-64"></canvas>
+
+        <div class="mt-6 text-sm text-gray-500">
+            <p>Note: For accurate analysis, ensure a quiet environment or isolate the noise source.</p>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for audio context and analyzer
+        let audioContext;
+        let analyser;
+        let microphone;
+        let animationFrameId;
+        let isAnalyzing = false;
+        let dataArray;
+        let bufferLength;
+
+        // UI elements
+        const toggleAnalysisBtn = document.getElementById('toggleAnalysisBtn');
+        const noiseTypeDisplay = document.getElementById('noiseType');
+        const frequencyInfoDisplay = document.getElementById('frequencyInfo');
+        const audioVisualizer = document.getElementById('audioVisualizer');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const canvasCtx = audioVisualizer.getContext('2d');
+
+        // Function to show messages to the user
+        function showMessage(message, type = 'info') {
+            messageText.textContent = message;
+            messageBox.classList.remove('hidden');
+            if (type === 'error') {
+                messageBox.classList.remove('bg-yellow-100', 'border-yellow-400', 'text-yellow-700');
+                messageBox.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+            } else {
+                messageBox.classList.remove('bg-red-100', 'border-red-400', 'text-red-700');
+                messageBox.classList.add('bg-yellow-100', 'border-yellow-400', 'text-yellow-700');
+            }
+        }
+
+        // Function to hide messages
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        // Function to start audio analysis
+        async function startAnalysis() {
+            if (isAnalyzing) return; // Prevent multiple starts
+
+            try {
+                // Request microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                showMessage('Microphone access granted. Starting analysis...');
+
+                // Create AudioContext and connect nodes
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+
+                microphone.connect(analyser);
+                analyser.fftSize = 2048; // Fast Fourier Transform size (power of 2)
+                bufferLength = analyser.frequencyBinCount; // Number of data points
+                dataArray = new Uint8Array(bufferLength); // Array to hold frequency data
+
+                isAnalyzing = true;
+                toggleAnalysisBtn.textContent = 'Stop Analysis';
+                toggleAnalysisBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                toggleAnalysisBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+                hideMessage(); // Hide initial message once analysis starts
+
+                // Start the visualization and analysis loop
+                draw();
+
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                showMessage('Error: Could not access microphone. Please ensure it is connected and grant permission.', 'error');
+                isAnalyzing = false; // Reset state if error occurs
+                toggleAnalysisBtn.textContent = 'Start Analysis'; // Reset button text
+                toggleAnalysisBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                toggleAnalysisBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            }
+        }
+
+        // Function to stop audio analysis
+        function stopAnalysis() {
+            if (!isAnalyzing) return;
+
+            cancelAnimationFrame(animationFrameId); // Stop the animation loop
+
+            if (microphone) {
+                microphone.disconnect();
+                microphone.mediaStream.getTracks().forEach(track => track.stop()); // Stop microphone track
+            }
+            if (audioContext) {
+                audioContext.close(); // Close the audio context
+            }
+
+            isAnalyzing = false;
+            toggleAnalysisBtn.textContent = 'Start Analysis';
+            toggleAnalysisBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+            toggleAnalysisBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            noiseTypeDisplay.textContent = 'None';
+            frequencyInfoDisplay.textContent = '';
+            canvasCtx.clearRect(0, 0, audioVisualizer.width, audioVisualizer.height); // Clear canvas
+            showMessage('Analysis stopped. Click "Start Analysis" to restart.', 'info');
+        }
+
+        // Main drawing and analysis loop
+        function draw() {
+            animationFrameId = requestAnimationFrame(draw);
+
+            // Get frequency data
+            analyser.getByteFrequencyData(dataArray);
+
+            // Clear canvas
+            canvasCtx.clearRect(0, 0, audioVisualizer.width, audioVisualizer.height);
+
+            // Set canvas dimensions to match display size (important for responsiveness)
+            const width = audioVisualizer.clientWidth;
+            const height = audioVisualizer.clientHeight;
+            audioVisualizer.width = width;
+            audioVisualizer.height = height;
+
+            // Draw frequency bars
+            const barWidth = (width / bufferLength) * 2.5; // Adjusted bar width for better visualization
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = dataArray[i] / 255 * height; // Scale height to canvas height
+
+                canvasCtx.fillStyle = `rgb(${dataArray[i]}, 50, 150)`; // Color based on frequency intensity
+                canvasCtx.fillRect(x, height - barHeight, barWidth, barHeight);
+
+                x += barWidth + 1;
+            }
+
+            // Perform noise analysis
+            analyzeNoise();
+        }
+
+        // Function to analyze the noise based on frequency data
+        function analyzeNoise() {
+            if (!analyser || !dataArray || !audioContext) {
+                noiseTypeDisplay.textContent = 'Analyzing...';
+                frequencyInfoDisplay.textContent = '';
+                return;
+            }
+
+            const sampleRate = audioContext.sampleRate;
+            const frequencyBinWidth = sampleRate / analyser.fftSize; // Hz per data point
+
+            let detectedNoise = 'General Background Noise';
+            let info = '';
+
+            // Thresholds for detection (these may need fine-tuning based on environment)
+            const HUM_THRESHOLD = 180; // Amplitude threshold for hum detection
+            const VIBRATION_THRESHOLD = 150; // Amplitude threshold for low-frequency vibration
+            const MIN_VIBRATION_FREQ_RANGE = 20; // Hz
+            const MAX_VIBRATION_FREQ_RANGE = 200; // Hz
+
+            // Check for 50Hz/60Hz hum
+            const hum50HzIndex = Math.round(50 / frequencyBinWidth);
+            const hum60HzIndex = Math.round(60 / frequencyBinWidth);
+
+            const amplitude50Hz = dataArray[hum50HzIndex] || 0;
+            const amplitude60Hz = dataArray[hum60HzIndex] || 0;
+
+            if (amplitude60Hz > HUM_THRESHOLD) {
+                detectedNoise = 'Ground Hum (60Hz)';
+                info = `Amplitude: ${amplitude60Hz.toFixed(0)}`;
+            } else if (amplitude50Hz > HUM_THRESHOLD) {
+                detectedNoise = 'Ground Hum (50Hz)';
+                info = `Amplitude: ${amplitude50Hz.toFixed(0)}`;
+            } else {
+                // Check for general low-frequency vibration
+                let lowFreqEnergy = 0;
+                let lowFreqCount = 0;
+
+                const minVibrationIndex = Math.round(MIN_VIBRATION_FREQ_RANGE / frequencyBinWidth);
+                const maxVibrationIndex = Math.round(MAX_VIBRATION_FREQ_RANGE / frequencyBinWidth);
+
+                for (let i = minVibrationIndex; i <= maxVibrationIndex && i < bufferLength; i++) {
+                    lowFreqEnergy += dataArray[i];
+                    lowFreqCount++;
+                }
+
+                if (lowFreqCount > 0) {
+                    const averageLowFreqAmplitude = lowFreqEnergy / lowFreqCount;
+                    if (averageLowFreqAmplitude > VIBRATION_THRESHOLD) {
+                        detectedNoise = 'Vibration/Low-Frequency Rumble';
+                        info = `Average Amplitude (${MIN_VIBRATION_FREQ_RANGE}-${MAX_VIBRATION_FREQ_RANGE}Hz): ${averageLowFreqAmplitude.toFixed(0)}`;
+                    }
+                }
+            }
+
+            // Update UI
+            noiseTypeDisplay.textContent = detectedNoise;
+            frequencyInfoDisplay.textContent = info;
+        }
+
+        // Event listener for the toggle button
+        toggleAnalysisBtn.addEventListener('click', () => {
+            if (isAnalyzing) {
+                stopAnalysis();
+            } else {
+                startAnalysis();
+            }
+        });
+
+        // Initialize message on load
+        window.onload = () => {
+            showMessage('Click "Start Analysis" to begin.');
+        };
+
+        // Handle window resize to make canvas responsive
+        window.addEventListener('resize', () => {
+            if (isAnalyzing) {
+                // Redraw to adjust to new size
+                draw();
+            } else {
+                // Clear and reset canvas size when not analyzing
+                const width = audioVisualizer.clientWidth;
+                const height = audioVisualizer.clientHeight;
+                audioVisualizer.width = width;
+                audioVisualizer.height = height;
+                canvasCtx.clearRect(0, 0, width, height);
+            }
+        });
+
+    </script>
+</body>
+</html>
