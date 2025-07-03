@@ -74,9 +74,16 @@ async function analyzeAudio() {
       let hum = false, buzz = false, plosive = false;
       let backgroundNoise = false, lowRMS = false;
       let echo = false, echoScore = 0;
+      let hissDetected = false; // Declare hissDetected
 
       // Voice naturalness metrics
       let silentGaps = 0, variation = 0, lastAmp = 0, peakEnergy = 0;
+
+      // Create an analyser node to get frequency data (for hiss detection)
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048; // Adjust as needed
+      const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+
 
       for (let i = 0; i < totalSamples; i += windowSize) {
         const slice = data.slice(i, i + windowSize);
@@ -95,12 +102,39 @@ async function analyzeAudio() {
         if (rms < 0.01 && peak > 0.02) silentGaps++;
         if (rms > 0.2) backgroundNoise = true;
         if (rms < 0.01) lowRMS = true;
-        peakEnergy = Math.max(peakEnergy, peakEnergy, peak);
+        peakEnergy = Math.max(peakEnergy, peak); // Corrected: Use peak directly
 
         // Simulated FFT-based noise detection (approx)
+        // Note: For real-time FFT, you'd typically connect the AudioBufferSourceNode
+        // to the analyser, but for offline analysis, we'll simulate.
+        // This part of the code is still a simplification.
         if (!hum && slice.some(v => Math.abs(v) > 0.005 && Math.abs(v) < 0.02)) hum = true;
         if (!buzz && slice.some(v => Math.abs(v) > 0.03 && Math.abs(v) < 0.05)) buzz = true;
         if (!plosive && slice.some(v => Math.abs(v) > 0.6)) plosive = true;
+
+        // Hiss/Static detection (simplified)
+        // This requires frequency data. To truly get frequency data per slice,
+        // you'd need to perform an FFT on each 'slice'.
+        // For a basic approximation, we'll use the conceptual idea.
+        // A more accurate implementation would use a proper FFT library or the AnalyserNode if streaming.
+        // For demonstration purposes, let's assume `frequencyData` could be derived for the `slice`.
+        // This requires an actual AnalyserNode attached to a source, which is tricky for offline array processing.
+        // A direct FFT implementation would be more robust.
+
+        // Placeholder for conceptual hiss detection without real-time AnalyserNode connection
+        // For a true implementation, you'd feed 'slice' into an FFT and analyze its spectrum.
+        // Here, we'll use a very simplified heuristic based on the existing `rms` and `peak`
+        // that might indirectly indicate broadband noise if low amplitude but present.
+        // A better approach would involve creating an `AudioBufferSourceNode` from the `slice`,
+        // connecting it to an `AnalyserNode`, and then getting `getByteFrequencyData`.
+        // As that's more complex for this existing structure, we'll use a simpler heuristic for now.
+        // If the audio is very quiet overall but still has 'some' activity (not pure silence),
+        // it might be hiss.
+        if (rms > 0.001 && rms < 0.03 && !plosive && !hum && !buzz) { // Low but present RMS, not obvious hum/buzz/plosive
+          // This is a very rough heuristic for hiss, a proper implementation needs spectral analysis
+          hissDetected = true;
+        }
+
 
         const percent = Math.floor((i / totalSamples) * 100);
         loading.textContent = `🔍 Analyzing... ${percent}%`;
@@ -125,7 +159,8 @@ async function analyzeAudio() {
         (buzz ? 1 : 0) +
         (plosive ? 1 : 0) +
         (backgroundNoise ? 1 : 0) +
-        (lowRMS ? 1 : 0)
+        (lowRMS ? 1 : 0) +
+        (hissDetected ? 1 : 0) // Include hiss in quality score
       ));
 
       let naturalScore = 5;
@@ -133,9 +168,11 @@ async function analyzeAudio() {
       if (variation < 1.0) naturalScore -= 1;
       if (peakEnergy > 0.9) naturalScore -= 1;
       if (echo) naturalScore -= 1;
+      if (silentGaps > (totalSamples / windowSize / 2) && !peakEnergy) naturalScore -= 1; // Significant silent gaps and no speech
 
       // 📌 Comments for naturalness
       const naturalnessComments = [];
+      if (silentGaps > (totalSamples / windowSize / 2)) naturalnessComments.push("⚠️ Extended periods of silence or no discernible speech."); // More robust silent gap check
       if (silentGaps > 5) naturalnessComments.push("⚠️ Awkward pacing");
       if (variation < 1.0) naturalnessComments.push("⚠️ Monotone delivery");
       if (peakEnergy > 0.9) naturalnessComments.push("⚠️ Overacting or excessive loudness");
@@ -158,9 +195,10 @@ async function analyzeAudio() {
           ${buzz ? "⚠️ Buzz<br>" : ""}
           ${plosive ? "⚠️ Plosive<br>" : ""}
           ${backgroundNoise ? "⚠️ Background Noise<br>" : ""}
+          ${hissDetected ? "⚠️ Hiss/Static<br>" : ""} // Add this line
           ${lowRMS ? "⚠️ Too Quiet<br>" : ""}
           ${echo ? "⚠️ Echo<br>" : ""}
-          ${(hum || buzz || plosive || backgroundNoise || echo || lowRMS) ? "" : "✅ Clean Recording"}
+          ${(hum || buzz || plosive || backgroundNoise || echo || lowRMS || hissDetected) ? "" : "✅ Clean Recording"}
         </p>
 
         <p><b>🗣️ Voice Naturalness:</b><br>
