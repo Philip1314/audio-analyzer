@@ -19,6 +19,7 @@ const pronunciationPaceSpan = document.getElementById('pronunciationPace');
 const overallStatusP = document.getElementById('overallStatus');
 const statusReasonP = document.getElementById('statusReason');
 const downloadReportBtn = document.getElementById('downloadReportBtn');
+const wavesurferStatusP = document.getElementById('wavesurferStatus'); // New element
 
 // --- Wavesurfer.js Instance ---
 let wavesurfer = null;
@@ -57,6 +58,8 @@ function showError(message) {
     hideElement(visualizationsDiv);
     hideElement(analysisResultsDiv);
     hideElement(downloadReportBtn);
+    wavesurferStatusP.textContent = 'Wavesurfer.js status: Error loading.'; // Update status
+    showElement(wavesurferStatusP);
 }
 
 /**
@@ -77,6 +80,9 @@ function clearResults() {
     hideElement(analysisResultsDiv);
     hideElement(downloadReportBtn);
     hideElement(errorBox);
+    // Keep wavesurferStatusP visible to show loading status
+    showElement(wavesurferStatusP);
+    wavesurferStatusP.textContent = 'Wavesurfer.js status: Loading...';
 }
 
 // --- File Handling Event Listeners ---
@@ -128,6 +134,8 @@ async function handleFile(file) {
             showError("The audio visualization library (Wavesurfer.js) is not loaded. Please check your internet connection or try again later.");
             return;
         }
+        wavesurferStatusP.textContent = 'Wavesurfer.js status: Loaded.'; // Confirm loaded
+        showElement(wavesurferStatusP); // Ensure it's visible
 
         // Initialize AudioContext if not already present
         if (!audioContext) {
@@ -378,15 +386,22 @@ window.onload = () => {
     hideElement(analysisResultsDiv);
     hideElement(downloadReportBtn);
     hideElement(errorBox);
+    showElement(wavesurferStatusP); // Ensure the status message is visible initially
 
     // Check if WavesSurfer loaded successfully after a short delay
     // This gives the deferred script time to execute.
     setTimeout(() => {
         if (typeof WavesSurfer === 'undefined') {
             console.error("WavesSurfer library is not defined. It might have failed to load from the CDN.");
+            wavesurferStatusP.textContent = 'Wavesurfer.js status: Failed to load. Check internet/browser.';
+            wavesurferStatusP.classList.remove('text-gray-500');
+            wavesurferStatusP.classList.add('text-red-500');
             showError("The audio visualization library (Wavesurfer.js) failed to load. Please check your internet connection or try again later.");
         } else {
             console.log("WavesSurfer library loaded successfully.");
+            wavesurferStatusP.textContent = 'Wavesurfer.js status: Loaded successfully.';
+            wavesurferStatusP.classList.remove('text-gray-500', 'text-red-500');
+            wavesurferStatusP.classList.add('text-green-500');
         }
     }, 500); // Check after 500ms
 };
