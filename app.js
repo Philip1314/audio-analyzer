@@ -99,10 +99,13 @@ async function analyzeAudio() {
         if (rms > 0.2) backgroundNoise = true;
         if (rms < 0.01) lowRMS = true;
 
-        // Basic FFT check (for hum, buzz, plosive)
-        for (let i = 50; i <= 60; i++) if (chunk[i] > 0.01) hum = true;
-        for (let i = 2000; i <= 4000; i++) if (chunk[i] > 0.01) buzz = true;
-        for (let i = 80; i <= 160; i++) if (chunk[i] > 0.01) plosive = true;
+        // FFT-based heuristics (optional improvements can be added later)
+        // Simulated checks for known problems
+        if (c === 0) {
+          hum = data.some(v => Math.abs(v) > 0.005 && Math.abs(v) < 0.02);
+          buzz = data.some(v => Math.abs(v) > 0.03 && Math.abs(v) < 0.05);
+          plosive = data.some(v => Math.abs(v) > 0.6);
+        }
 
         const percent = Math.floor((c / totalChunks) * 100);
         loading.textContent = `🔍 Analyzing... ${percent}%`;
@@ -110,7 +113,7 @@ async function analyzeAudio() {
         await new Promise(r => setTimeout(r, 5));
       }
 
-      // Echo detection via basic autocorrelation
+      // Echo detection via autocorrelation
       const maxLag = Math.floor(sampleRate * 0.05);
       for (let lag = sampleRate * 0.02; lag < maxLag; lag += 100) {
         let sum = 0;
@@ -136,7 +139,14 @@ async function analyzeAudio() {
       if (peakEnergy > 0.9) naturalScore -= 1; // overacting
       if (echo) naturalScore -= 1;
 
-      // Clean up
+      // Interpret naturalness comments
+      let naturalnessComments = [];
+      if (silentGaps > 5) naturalnessComments.push("⚠️ Awkward pacing");
+      if (variation < 1.0) naturalnessComments.push("⚠️ Monotone delivery");
+      if (peakEnergy > 0.9) naturalnessComments.push("⚠️ Overacting or excessive loudness");
+      if (naturalnessComments.length === 0) naturalnessComments.push("✅ Natural sounding voice");
+
+      // Clean up UI
       loading.classList.add("hidden");
       progressWrapper.classList.add("hidden");
       progressBar.style.width = "0%";
@@ -147,7 +157,8 @@ async function analyzeAudio() {
       result.innerHTML = `
         <h3>🔊 Audio Quality Score: <span class="${failClass(qualityScore)}">${qualityScore}/5</span></h3>
         <h3>🎙 Voice Naturalness Score: <span class="${failClass(naturalScore)}">${naturalScore}/5</span></h3>
-        <p><b>Noise Detection:</b><br>
+
+        <p><b>🎧 Noise Detection:</b><br>
           ${hum ? "⚠️ Hum<br>" : ""}
           ${buzz ? "⚠️ Buzz<br>" : ""}
           ${plosive ? "⚠️ Plosive<br>" : ""}
@@ -155,6 +166,10 @@ async function analyzeAudio() {
           ${lowRMS ? "⚠️ Too Quiet<br>" : ""}
           ${echo ? "⚠️ Echo<br>" : ""}
           ${(hum || buzz || plosive || backgroundNoise || echo || lowRMS) ? "" : "✅ Clean Recording"}
+        </p>
+
+        <p><b>🗣️ Voice Naturalness:</b><br>
+          ${naturalnessComments.join("<br>")}
         </p>
       `;
     });
