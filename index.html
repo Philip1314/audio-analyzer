@@ -11,13 +11,16 @@
     <h1>🎧 Voice Audio Analyzer</h1>
 
     <label class="file-label">
-      <input type="file" id="audioFile" accept="audio/*" />
+      <input type="file" id="audioFile" accept="audio/*" onchange="showFileName()" />
       <span>Select Audio File</span>
     </label>
+
+    <div id="fileName" class="file-name">No file selected.</div>
 
     <button onclick="analyzeAudio()">Analyze</button>
 
     <section id="loading" class="loading hidden">
+      <div class="spinner"></div>
       <p>⏳ Analyzing audio...</p>
     </section>
 
