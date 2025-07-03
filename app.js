@@ -16,17 +16,9 @@ function detectClipping(buffer) {
 
 function analyzeFFT(buffer, sampleRate) {
   const len = buffer.length;
-  const win = buffer.slice(0, 16384); // Use first chunk
-  const fft = new Float32Array(win.length);
-  for (let i = 0; i < win.length; i++) {
-    fft[i] = win[i];
-  }
-
+  const win = buffer.slice(0, 16384);
   const spectrum = new Float32Array(win.length / 2);
-  const real = new Float32Array(win.length);
-  const imag = new Float32Array(win.length);
 
-  // Manual DFT (simple, lightweight)
   for (let k = 0; k < spectrum.length; k++) {
     let re = 0, im = 0;
     for (let n = 0; n < win.length; n++) {
@@ -57,11 +49,15 @@ function analyzeAudio() {
   const fileInput = document.getElementById("audioFile");
   const file = fileInput.files[0];
   const resultDiv = document.getElementById("result");
+  const loadingDiv = document.getElementById("loading");
 
   if (!file) {
-    resultDiv.innerText = "Please upload a file.";
+    resultDiv.innerHTML = "<p>Please upload a file.</p>";
     return;
   }
+
+  resultDiv.classList.add("hidden");
+  loadingDiv.classList.remove("hidden");
 
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const reader = new FileReader();
@@ -70,15 +66,13 @@ function analyzeAudio() {
     const arrayBuffer = e.target.result;
 
     audioCtx.decodeAudioData(arrayBuffer, function (audioBuffer) {
-      const channelData = audioBuffer.getChannelData(0); // Mono
+      const channelData = audioBuffer.getChannelData(0); // mono
       const totalRMS = rms(channelData);
       const dB = 20 * Math.log10(totalRMS + 1e-8);
       const clippingPct = detectClipping(channelData);
 
-      // Silence %
       const frameSize = Math.floor(audioCtx.sampleRate * 0.5);
-      let silentFrames = 0;
-      let totalFrames = 0;
+      let silentFrames = 0, totalFrames = 0;
 
       for (let i = 0; i < channelData.length; i += frameSize) {
         const frame = channelData.slice(i, i + frameSize);
@@ -89,17 +83,18 @@ function analyzeAudio() {
       }
 
       const silencePercent = (silentFrames / totalFrames) * 100;
-
-      // Noise Type Detection
       const noise = analyzeFFT(channelData, audioCtx.sampleRate);
 
-      // PASS/FAIL
-      const isPass = (dB >= -30 && dB <= -12) &&
+      const isPass = (
+        dB >= -30 && dB <= -12 &&
         silencePercent <= 25 &&
         clippingPct < 1 &&
-        !noise.hasHum && !noise.hasBuzz && !noise.hasPlosive;
+        !noise.hasHum && !noise.hasBuzz && !noise.hasPlosive
+      );
 
-      // Result summary
+      loadingDiv.classList.add("hidden");
+      resultDiv.classList.remove("hidden");
+
       resultDiv.innerHTML = `
         <p><b>Loudness:</b> ${dB.toFixed(2)} dBFS</p>
         <p><b>Silence:</b> ${silencePercent.toFixed(2)}%</p>
@@ -110,7 +105,7 @@ function analyzeAudio() {
           ${noise.hasPlosive ? "⚠️ Plosives detected<br>" : ""}
           ${(!noise.hasHum && !noise.hasBuzz && !noise.hasPlosive) ? "✅ None" : ""}
         </p>
-        <p><b>Result:</b> ${isPass ? "✅ PASS" : "❌ FAIL"}</p>
+        <p><b>Result:</b> <span class="${isPass ? "pass" : "fail"}">${isPass ? "✅ PASS" : "❌ FAIL"}</span></p>
       `;
     });
   };
