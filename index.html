@@ -10,23 +10,23 @@
   <div class="container">
     <h1>🎧 Audio Analyzer</h1>
 
-    <!-- ✅ Upload Section -->
     <input type="file" id="audioFile" accept="audio/*" onchange="showFileName()" />
     <p id="fileName">No file selected.</p>
 
-    <!-- ✅ Audio Player -->
     <audio id="audioPlayer" controls class="hidden"></audio>
 
-    <!-- ✅ Analyze Button -->
     <button onclick="analyzeAudio()">Analyze Audio</button>
-    
-    <!-- ✅ Loading + Results -->
-    <div id="loading" class="hidden">🔍 Analyzing...</div>
-    <div id="result" class="hidden"></div>
 
-    <!-- ✅ Visualizations -->
+    <!-- ✅ Progress Text + Bar -->
+    <div id="loading" class="hidden">🔍 Analyzing...</div>
+    <div id="progressWrapper" class="hidden">
+      <div id="progressBar"></div>
+    </div>
+
     <canvas id="waveformCanvas" class="hidden"></canvas>
     <canvas id="spectrogramCanvas" class="hidden"></canvas>
+
+    <div id="result" class="hidden"></div>
 
     <footer><small>Runs fully in browser. GitHub-only version.</small></footer>
   </div>
