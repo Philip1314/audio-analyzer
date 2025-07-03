@@ -1,0 +1,5 @@
+{
+  "min_loudness_db": -30,
+  "max_loudness_db": -12,
+  "max_silence_pct": 25
+}
