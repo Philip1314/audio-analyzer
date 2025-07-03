@@ -17,7 +17,11 @@
 
     <button onclick="analyzeAudio()">Analyze</button>
 
-    <section id="result" class="result-card">
+    <section id="loading" class="loading hidden">
+      <p>⏳ Analyzing audio...</p>
+    </section>
+
+    <section id="result" class="result-card hidden">
       <p>📤 Upload a WAV or MP3 to get started.</p>
     </section>
   </main>
