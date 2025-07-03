@@ -78,7 +78,7 @@ async function analyzeAudio() {
 
       // Voice naturalness metrics
       let silentGaps = 0, variation = 0, lastAmp = 0, peakEnergy = 0;
-      let speechLikeSegments = 0; // New: Count segments with speech-like activity
+      let speechLikeSegments = 0; // Count segments with speech-like activity
 
       // Create an analyser node to get frequency data (for hiss detection)
       // Note: For offline analysis of a buffer, using AnalyserNode directly in loop is complex.
@@ -115,8 +115,10 @@ async function analyzeAudio() {
         }
 
         // New: Detect speech-like segments
-        // Thresholds (0.05 RMS, 0.1 peak) are examples and might need tuning for your specific audio.
-        if (rms > 0.05 && peak > 0.1) {
+        // *** ADJUSTED THRESHOLDS FOR SPEECH DETECTION SENSITIVITY ***
+        // These values (0.04 RMS, 0.08 peak) are examples and might need further tuning.
+        // If speech is quiet, lower them. If background noise is triggering, raise them.
+        if (rms > 0.04 && peak > 0.08) {
           speechLikeSegments++;
         }
 
@@ -156,7 +158,9 @@ async function analyzeAudio() {
       const naturalnessComments = [];
 
       // New: Check for no discernible speech
-      if (speechRatio < 0.02) { // If less than 2% of frames have speech-like activity
+      // *** ADJUSTED SPEECH RATIO THRESHOLD ***
+      // This (0.03 = 3%) is an example. If speech is very sparse but present, increase.
+      if (speechRatio < 0.03) {
         naturalnessComments.push("⚠️ No discernible speech detected in the audio file.");
         naturalScore = 1; // Assign a very low score if no speech is detected
       } else {
