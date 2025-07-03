@@ -2,34 +2,118 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Audio Quality Analyzer</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      background: #f4f7fa;
+      color: #333;
+    }
+
+    h1, h3 {
+      text-align: center;
+    }
+
+    input[type="file"] {
+      display: block;
+      margin: 15px auto;
+    }
+
+    button {
+      background: #005eff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      display: block;
+      margin: 10px auto;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0042cc;
+    }
+
+    canvas {
+      width: 100%;
+      margin-top: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #progressWrapper {
+      width: 100%;
+      background: #ddd;
+      border-radius: 4px;
+      height: 10px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+
+    #progressBar {
+      width: 0%;
+      height: 100%;
+      background: #0077ff;
+      transition: width 0.3s ease;
+    }
+
+    .fail {
+      color: red;
+      font-weight: bold;
+    }
+
+    .pass {
+      color: green;
+      font-weight: bold;
+    }
+
+    #audioPlayer {
+      width: 100%;
+      margin: 10px 0;
+    }
+
+    #result {
+      background: #fff;
+      padding: 15px;
+      margin-top: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    p {
+      line-height: 1.5;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🎧 Audio Analyzer</h1>
+  <h1>🎤 Audio Analyzer</h1>
 
-    <input type="file" id="audioFile" accept="audio/*" onchange="showFileName()" />
-    <p id="fileName">No file selected.</p>
+  <input type="file" id="audioFile" accept="audio/*" onchange="showFileName()" />
+  <div id="fileName" style="text-align:center;color:#555;">No file selected.</div>
 
-    <audio id="audioPlayer" controls class="hidden"></audio>
+  <audio id="audioPlayer" class="hidden" controls></audio>
 
-    <button onclick="analyzeAudio()">Analyze Audio</button>
+  <button onclick="analyzeAudio()">Analyze Audio</button>
 
-    <!-- ✅ Progress Text + Bar -->
-    <div id="loading" class="hidden">🔍 Analyzing...</div>
-    <div id="progressWrapper" class="hidden">
-      <div id="progressBar"></div>
-    </div>
+  <canvas id="waveformCanvas" class="hidden"></canvas>
+  <canvas id="spectrogramCanvas" class="hidden" height="150"></canvas>
 
-    <canvas id="waveformCanvas" class="hidden"></canvas>
-    <canvas id="spectrogramCanvas" class="hidden"></canvas>
-
-    <div id="result" class="hidden"></div>
-
-    <footer><small>Runs fully in browser. GitHub-only version.</small></footer>
+  <div id="loading" style="text-align:center;margin-top:10px;" class="hidden">Loading...</div>
+  <div id="progressWrapper" class="hidden">
+    <div id="progressBar"></div>
   </div>
+
+  <div id="result" class="hidden"></div>
 
   <script src="app.js"></script>
 </body>
