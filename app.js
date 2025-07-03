@@ -1,117 +1,150 @@
 function showFileName() {
   const fileInput = document.getElementById("audioFile");
   const fileNameDiv = document.getElementById("fileName");
+  const audioPlayer = document.getElementById("audioPlayer");
+  const waveformCanvas = document.getElementById("waveformCanvas");
+  const spectrogramCanvas = document.getElementById("spectrogramCanvas");
 
   if (fileInput.files.length > 0) {
-    fileNameDiv.textContent = `Selected: ${fileInput.files[0].name}`;
+    const file = fileInput.files[0];
+    fileNameDiv.textContent = `Selected: ${file.name}`;
+    const url = URL.createObjectURL(file);
+    audioPlayer.src = url;
+    audioPlayer.classList.remove("hidden");
+    waveformCanvas.classList.add("hidden");
+    spectrogramCanvas.classList.add("hidden");
   } else {
     fileNameDiv.textContent = "No file selected.";
+    audioPlayer.classList.add("hidden");
   }
 }
 
-function rms(buffer) {
-  let sum = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    sum += buffer[i] * buffer[i];
-  }
-  return Math.sqrt(sum / buffer.length);
-}
+function drawWaveform(channelData) {
+  const canvas = document.getElementById("waveformCanvas");
+  const ctx = canvas.getContext("2d");
+  canvas.classList.remove("hidden");
+  const width = canvas.width = canvas.offsetWidth;
+  const height = canvas.height = 120;
+  ctx.clearRect(0, 0, width, height);
 
-function detectClipping(buffer) {
-  let clipped = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    if (Math.abs(buffer[i]) >= 0.98) clipped++;
-  }
-  return (clipped / buffer.length) * 100;
-}
-
-function analyzeFFT(buffer, sampleRate) {
-  const win = buffer.slice(0, 16384);
-  const spectrum = new Float32Array(win.length / 2);
-
-  for (let k = 0; k < spectrum.length; k++) {
-    let re = 0, im = 0;
-    for (let n = 0; n < win.length; n++) {
-      const phase = (2 * Math.PI * k * n) / win.length;
-      re += win[n] * Math.cos(phase);
-      im -= win[n] * Math.sin(phase);
+  const samplesPerPixel = Math.floor(channelData.length / width);
+  ctx.beginPath();
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    for (let i = 0; i < samplesPerPixel; i++) {
+      const sample = channelData[x * samplesPerPixel + i] || 0;
+      sum += sample * sample;
     }
-    spectrum[k] = Math.sqrt(re * re + im * im);
+    const rms = Math.sqrt(sum / samplesPerPixel);
+    const dB = 20 * Math.log10(rms + 1e-8);
+    const y = height - ((dB + 60) / 60) * height;
+    ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = "#005eff";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+}
+
+function drawSpectrogram(channelData, sampleRate) {
+  const canvas = document.getElementById("spectrogramCanvas");
+  const ctx = canvas.getContext("2d");
+  canvas.classList.remove("hidden");
+  const width = canvas.width = canvas.offsetWidth;
+  const height = canvas.height = 120;
+
+  const sliceSize = 1024;
+  const step = sliceSize;
+  let offset = 0;
+  const buffer = channelData.slice(0);
+
+  ctx.clearRect(0, 0, width, height);
+  const imageData = ctx.createImageData(width, height);
+  let x = 0;
+
+  while (offset + sliceSize < buffer.length && x < width) {
+    const slice = buffer.slice(offset, offset + sliceSize);
+    const spectrum = new Float32Array(sliceSize / 2);
+    for (let k = 0; k < spectrum.length; k++) {
+      let re = 0, im = 0;
+      for (let n = 0; n < slice.length; n++) {
+        const angle = (2 * Math.PI * k * n) / slice.length;
+        re += slice[n] * Math.cos(angle);
+        im -= slice[n] * Math.sin(angle);
+      }
+      spectrum[k] = Math.sqrt(re * re + im * im);
+    }
+
+    for (let y = 0; y < height; y++) {
+      const i = Math.floor((y / height) * spectrum.length);
+      const mag = spectrum[i];
+      const intensity = Math.min(255, Math.floor(mag * 0.5));
+      const pixelIndex = ((height - y - 1) * width + x) * 4;
+      imageData.data[pixelIndex + 0] = intensity;
+      imageData.data[pixelIndex + 1] = intensity * 0.7;
+      imageData.data[pixelIndex + 2] = 255 - intensity;
+      imageData.data[pixelIndex + 3] = 255;
+    }
+
+    offset += step;
+    x++;
   }
 
-  const freqs = spectrum.map((val, i) => ({
-    freq: i * sampleRate / win.length,
-    mag: val
-  }));
-
-  const lowHum = freqs.find(f => f.freq >= 48 && f.freq <= 52);
-  const midBuzz = freqs.find(f => f.freq >= 2000 && f.freq <= 4000);
-  const plosive = freqs.find(f => f.freq >= 80 && f.freq <= 150);
-
-  return {
-    hasHum: lowHum && lowHum.mag > 200,
-    hasBuzz: midBuzz && midBuzz.mag > 200,
-    hasPlosive: plosive && plosive.mag > 300
-  };
+  ctx.putImageData(imageData, 0, 0);
 }
 
 function analyzeAudio() {
   const fileInput = document.getElementById("audioFile");
   const file = fileInput.files[0];
-  const resultDiv = document.getElementById("result");
-  const loadingDiv = document.getElementById("loading");
+  const loading = document.getElementById("loading");
+  const result = document.getElementById("result");
 
-  if (!file) {
-    resultDiv.innerHTML = "<p>Please upload a file.</p>";
-    return;
-  }
+  if (!file) return alert("Please upload an audio file.");
 
-  resultDiv.classList.add("hidden");
-  loadingDiv.classList.remove("hidden");
+  result.classList.add("hidden");
+  loading.classList.remove("hidden");
 
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const reader = new FileReader();
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
   reader.onload = function (e) {
     const arrayBuffer = e.target.result;
-
     audioCtx.decodeAudioData(arrayBuffer, function (audioBuffer) {
       const channelData = audioBuffer.getChannelData(0);
-      const dB = 20 * Math.log10(rms(channelData) + 1e-8);
-      const clippingPct = detectClipping(channelData);
+      drawWaveform(channelData);
+      drawSpectrogram(channelData, audioCtx.sampleRate);
 
-      const frameSize = Math.floor(audioCtx.sampleRate * 0.5);
-      let silentFrames = 0, totalFrames = 0;
-      for (let i = 0; i < channelData.length; i += frameSize) {
-        const frame = channelData.slice(i, i + frameSize);
-        const frameDB = 20 * Math.log10(rms(frame) + 1e-8);
-        if (frameDB < -35) silentFrames++;
-        totalFrames++;
+      let hum = false, buzz = false, plosive = false;
+      const fft = new Float32Array(8192);
+      for (let i = 0; i < fft.length; i++) fft[i] = channelData[i] || 0;
+
+      for (let k = 0; k < fft.length / 2; k++) {
+        let re = 0, im = 0;
+        for (let n = 0; n < fft.length; n++) {
+          const angle = (2 * Math.PI * k * n) / fft.length;
+          re += fft[n] * Math.cos(angle);
+          im -= fft[n] * Math.sin(angle);
+        }
+        const mag = Math.sqrt(re * re + im * im);
+        const freq = k * audioCtx.sampleRate / fft.length;
+
+        if (freq >= 48 && freq <= 52 && mag > 100) hum = true;
+        if (freq >= 2000 && freq <= 4000 && mag > 120) buzz = true;
+        if (freq >= 80 && freq <= 150 && mag > 160) plosive = true;
       }
 
-      const silencePercent = (silentFrames / totalFrames) * 100;
-      const noise = analyzeFFT(channelData, audioCtx.sampleRate);
+      let issues = [];
+      if (hum) issues.push("⚠️ Hum detected");
+      if (buzz) issues.push("⚠️ Buzz detected");
+      if (plosive) issues.push("⚠️ Plosive detected");
+      if (issues.length === 0) issues.push("✅ Clean recording");
 
-      const isPass =
-        dB >= -30 && dB <= -12 &&
-        silencePercent <= 25 &&
-        clippingPct < 1 &&
-        !noise.hasHum && !noise.hasBuzz && !noise.hasPlosive;
-
-      loadingDiv.classList.add("hidden");
-      resultDiv.classList.remove("hidden");
-
-      resultDiv.innerHTML = `
-        <p><b>Loudness:</b> ${dB.toFixed(2)} dBFS</p>
-        <p><b>Silence:</b> ${silencePercent.toFixed(2)}%</p>
-        <p><b>Clipping:</b> ${clippingPct.toFixed(2)}%</p>
-        <p><b>Detected Noise:</b><br>
-          ${noise.hasHum ? "⚠️ Hum detected<br>" : ""}
-          ${noise.hasBuzz ? "⚠️ Buzz detected<br>" : ""}
-          ${noise.hasPlosive ? "⚠️ Plosives detected<br>" : ""}
-          ${(!noise.hasHum && !noise.hasBuzz && !noise.hasPlosive) ? "✅ None" : ""}
-        </p>
-        <p><b>Result:</b> <span class="${isPass ? "pass" : "fail"}">${isPass ? "✅ PASS" : "❌ FAIL"}</span></p>
+      loading.classList.add("hidden");
+      result.classList.remove("hidden");
+      result.innerHTML = `
+        <p><b>Noise Analysis:</b><br>${issues.join("<br>")}</p>
+        <p><b>Result:</b> <span class="${hum || buzz || plosive ? 'fail' : 'pass'}">
+          ${hum || buzz || plosive ? "❌ FAIL" : "✅ PASS"}
+        </span></p>
       `;
     });
   };
