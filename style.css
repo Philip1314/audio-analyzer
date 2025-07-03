@@ -43,8 +43,14 @@ input[type="file"] {
   color: white;
   border-radius: 8px;
   cursor: pointer;
-  margin-bottom: 1em;
+  margin-bottom: 0.5em;
   font-size: 1em;
+}
+
+.file-name {
+  font-size: 0.9em;
+  color: #666;
+  margin-bottom: 1.2em;
 }
 
 button {
@@ -93,9 +99,27 @@ button:hover {
 }
 
 .loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   margin-top: 1.5em;
   font-size: 1.2em;
   color: #555;
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--primary);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1em;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .hidden {
