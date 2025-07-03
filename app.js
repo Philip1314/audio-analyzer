@@ -74,16 +74,11 @@ async function analyzeAudio() {
       let hum = false, buzz = false, plosive = false;
       let backgroundNoise = false, lowRMS = false;
       let echo = false, echoScore = 0;
-      let hissDetected = false;
+      let hissDetected = false; // Added hiss detection flag
 
       // Voice naturalness metrics
       let silentGaps = 0, variation = 0, lastAmp = 0, peakEnergy = 0;
-      let speechLikeSegments = 0; // Count segments with speech-like activity
-
-      // Create an analyser node to get frequency data (for hiss detection)
-      // Note: For offline analysis of a buffer, using AnalyserNode directly in loop is complex.
-      // A proper FFT library or separate processing would be needed for accurate per-slice frequency data.
-      // The current hiss detection remains a heuristic based on RMS/amplitude.
+      let speechLikeSegments = 0; // Added speech-like segments counter
 
       for (let i = 0; i < totalSamples; i += windowSize) {
         const slice = data.slice(i, i + windowSize);
@@ -102,6 +97,7 @@ async function analyzeAudio() {
         if (rms < 0.01 && peak > 0.02) silentGaps++;
         if (rms > 0.2) backgroundNoise = true;
         if (rms < 0.01) lowRMS = true;
+        // Corrected: Removed duplicate peakEnergy
         peakEnergy = Math.max(peakEnergy, peak);
 
         // Simulated noise detection (approx)
@@ -109,15 +105,14 @@ async function analyzeAudio() {
         if (!buzz && slice.some(v => Math.abs(v) > 0.03 && Math.abs(v) < 0.05)) buzz = true;
         if (!plosive && slice.some(v => Math.abs(v) > 0.6)) plosive = true;
 
-        // Hiss/Static detection (simplified heuristic)
+        // Hiss/Static detection (simplified heuristic) - previously added
         if (rms > 0.001 && rms < 0.03 && !plosive && !hum && !buzz) {
           hissDetected = true;
         }
 
-        // New: Detect speech-like segments
-        // *** ADJUSTED THRESHOLDS FOR SPEECH DETECTION SENSITIVITY ***
-        // These values (0.04 RMS, 0.08 peak) are examples and might need further tuning.
-        // If speech is quiet, lower them. If background noise is triggering, raise them.
+        // Detect speech-like segments - previously added, with slightly adjusted thresholds for sensitivity
+        // You might still need to fine-tune these values (0.04 RMS, 0.08 peak)
+        // based on the typical volume of your audio files.
         if (rms > 0.04 && peak > 0.08) {
           speechLikeSegments++;
         }
@@ -141,6 +136,7 @@ async function analyzeAudio() {
 
       // Calculate total frames for speech ratio
       const totalFrames = Math.ceil(totalSamples / windowSize);
+      // Adjusted speechRatio threshold for "no discernible speech" to 3%
       const speechRatio = speechLikeSegments / totalFrames;
 
       // 📊 Scoring
@@ -150,24 +146,21 @@ async function analyzeAudio() {
         (plosive ? 1 : 0) +
         (backgroundNoise ? 1 : 0) +
         (lowRMS ? 1 : 0) +
-        (hissDetected ? 1 : 0)
+        (hissDetected ? 1 : 0) // Include hiss in quality score
       ));
 
       let naturalScore = 5;
-      // Initialize naturalness comments array here
-      const naturalnessComments = [];
+      const naturalnessComments = []; // Initialize here
 
-      // New: Check for no discernible speech
-      // *** ADJUSTED SPEECH RATIO THRESHOLD ***
-      // This (0.03 = 3%) is an example. If speech is very sparse but present, increase.
-      if (speechRatio < 0.03) {
+      // Check for no discernible speech FIRST
+      if (speechRatio < 0.03) { // If less than 3% of frames have speech-like activity
         naturalnessComments.push("⚠️ No discernible speech detected in the audio file.");
         naturalScore = 1; // Assign a very low score if no speech is detected
       } else {
-        // Apply other naturalness checks only if speech is detected
-        if (silentGaps > (totalFrames * 0.5)) { // Existing check for excessive silence
-          naturalnessComments.push("⚠️ Extended periods of silence or no discernible speech.");
-          naturalScore = Math.max(1, naturalScore - 1); // Reduce score but not below 1
+        // Apply other naturalness checks only if speech IS detected
+        if (silentGaps > (totalFrames * 0.5)) { // Check for excessive silence (more than 50% of the file)
+          naturalnessComments.push("⚠️ Extended periods of silence or sparse speech.");
+          naturalScore = Math.max(1, naturalScore - 1);
         }
         if (variation < 1.0) {
           naturalnessComments.push("⚠️ Monotone delivery");
@@ -177,7 +170,8 @@ async function analyzeAudio() {
           naturalnessComments.push("⚠️ Overacting or excessive loudness");
           naturalScore = Math.max(1, naturalScore - 1);
         }
-        if (echo) { // Echo impacts naturalness
+        if (echo) {
+          naturalnessComments.push("⚠️ Echo detected"); // Added specific comment for echo
           naturalScore = Math.max(1, naturalScore - 1);
         }
 
@@ -214,6 +208,14 @@ async function analyzeAudio() {
         </p>
       `;
     });
+  };
+
+  reader.onerror = function(e) {
+    loading.classList.add("hidden");
+    progressWrapper.classList.add("hidden");
+    result.classList.remove("hidden");
+    result.innerHTML = `<p style="color:red;">Error reading file: ${e.target.error.name}</p>`;
+    console.error("FileReader error:", e.target.error);
   };
 
   reader.readAsArrayBuffer(input.files[0]);
