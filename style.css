@@ -1,134 +1,96 @@
 :root {
   --primary: #005eff;
-  --bg: #f7f9fc;
+  --bg: #f4f7fa;
   --text: #222;
-  --accent: #e6f0ff;
   --pass: #28a745;
   --fail: #dc3545;
 }
 
-* {
-  box-sizing: border-box;
-}
-
 body {
   margin: 0;
-  padding: 0;
-  font-family: "Segoe UI", sans-serif;
-  background-color: var(--bg);
+  font-family: 'Segoe UI', sans-serif;
+  background: var(--bg);
   color: var(--text);
 }
 
 .container {
   max-width: 600px;
   margin: auto;
-  padding: 2em 1em;
+  padding: 1.5em;
   text-align: center;
 }
 
-h1 {
-  font-size: 1.7em;
-  color: var(--primary);
-  margin-bottom: 1em;
+.file-label {
+  display: inline-block;
+  background: var(--primary);
+  color: #fff;
+  padding: 0.8em 1.4em;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 1em 0;
 }
 
 input[type="file"] {
   display: none;
 }
 
-.file-label {
-  display: inline-block;
-  padding: 0.8em 1.2em;
-  background: var(--primary);
-  color: white;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-bottom: 0.5em;
-  font-size: 1em;
-}
-
 .file-name {
   font-size: 0.9em;
   color: #666;
-  margin-bottom: 1.2em;
-}
-
-button {
-  padding: 0.8em 1.5em;
-  font-size: 1em;
-  margin: 0.5em auto;
-  background-color: #333;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.3s ease;
-}
-
-button:hover {
-  background-color: #000;
-}
-
-.result-card {
-  background: white;
-  padding: 1.5em;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  margin-top: 2em;
-  text-align: left;
-}
-
-.result-card p {
-  margin: 0.5em 0;
-  font-size: 1em;
-}
-
-.result-card b {
-  display: inline-block;
-  width: 120px;
-}
-
-.pass {
-  color: var(--pass);
-  font-weight: bold;
-}
-
-.fail {
-  color: var(--fail);
-  font-weight: bold;
-}
-
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 1.5em;
-  font-size: 1.2em;
-  color: #555;
-}
-
-.spinner {
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid var(--primary);
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  animation: spin 1s linear infinite;
   margin-bottom: 1em;
 }
 
+audio {
+  width: 100%;
+  margin-bottom: 1em;
+}
+
+button {
+  background: #333;
+  color: white;
+  padding: 0.7em 1.5em;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.loading {
+  margin-top: 2em;
+  font-size: 1em;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #ccc;
+  border-top: 4px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 0.8em;
+}
+
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
-.hidden {
-  display: none;
+canvas {
+  width: 100%;
+  height: 120px;
+  margin-top: 1em;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 
-footer {
-  text-align: center;
-  margin: 2em 0;
-  font-size: 0.85em;
-  color: #777;
+.result-card {
+  margin-top: 2em;
+  background: white;
+  padding: 1em;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
+
+.result-card span.pass { color: var(--pass); font-weight: bold; }
+.result-card span.fail { color: var(--fail); font-weight: bold; }
+
+.hidden { display: none; }
