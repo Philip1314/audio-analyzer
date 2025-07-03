@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🎧 Voice Audio Analyzer</title>
+  <title>🎧 Audio Analyzer</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="container">
-    <h1>🎧 Voice Audio Analyzer</h1>
+    <h1>🎧 Voice Analyzer (Offline GitHub Version)</h1>
 
     <label class="file-label">
       <input type="file" id="audioFile" accept="audio/*" onchange="showFileName()" />
@@ -16,6 +16,7 @@
     </label>
 
     <div id="fileName" class="file-name">No file selected.</div>
+    <audio id="audioPlayer" controls class="hidden"></audio>
 
     <button onclick="analyzeAudio()">Analyze</button>
 
@@ -24,13 +25,16 @@
       <p>⏳ Analyzing audio...</p>
     </section>
 
+    <canvas id="waveformCanvas" class="hidden"></canvas>
+    <canvas id="spectrogramCanvas" class="hidden"></canvas>
+
     <section id="result" class="result-card hidden">
-      <p>📤 Upload a WAV or MP3 to get started.</p>
+      <p>📤 Upload an audio file to see results.</p>
     </section>
   </main>
 
   <footer>
-    <small>Built with ❤️ for browser-based voice QA</small>
+    <small>Built for GitHub Pages • No backend or install</small>
   </footer>
 
   <script src="app.js"></script>
