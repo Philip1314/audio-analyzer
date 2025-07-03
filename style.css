@@ -92,6 +92,16 @@ button:hover {
   font-weight: bold;
 }
 
+.loading {
+  margin-top: 1.5em;
+  font-size: 1.2em;
+  color: #555;
+}
+
+.hidden {
+  display: none;
+}
+
 footer {
   text-align: center;
   margin: 2em 0;
