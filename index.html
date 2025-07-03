@@ -3,275 +3,493 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Noise Analyzer</title>
+    <title>Advanced Audio Analyzer</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Wavesurfer.js for waveform visualization -->
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f0f2f5; /* Light gray background */
+            background-color: #f8fafc; /* Light blue-gray background */
+            color: #334155; /* Darker text */
+        }
+        .drop-area {
+            border: 2px dashed #94a3b8; /* Slate border */
+            background-color: #f1f5f9; /* Lighter slate background */
+            transition: background-color 0.3s ease;
+        }
+        .drop-area.highlight {
+            background-color: #e0f2fe; /* Light blue highlight */
+            border-color: #3b82f6; /* Blue border */
         }
         canvas {
             display: block;
-            background-color: #1a202c; /* Dark background for canvas */
-            border-radius: 0.75rem; /* Rounded corners */
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+            border-radius: 0.5rem;
+            background-color: #e2e8f0; /* Light gray background for canvas */
+        }
+        #waveform {
+            height: 120px; /* Fixed height for waveform */
+            background-color: #1e293b; /* Dark background for waveform */
+            border-radius: 0.5rem;
+            overflow: hidden; /* Hide overflow from wavesurfer */
+        }
+        #spectrogramCanvas {
+            height: 150px; /* Fixed height for spectrogram */
+            background-color: #1e293b; /* Dark background for spectrogram */
+            border-radius: 0.5rem;
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4 sm:p-6 md:p-8">
-    <div class="bg-white p-6 sm:p-8 md:p-10 rounded-xl shadow-lg w-full max-w-2xl text-center">
-        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-6">Audio Noise Analyzer</h1>
-
-        <p class="text-gray-600 mb-6">
-            Click 'Start Analysis' to allow microphone access and begin analyzing background noise.
-            The analyzer will attempt to identify common issues like ground hum (50Hz/60Hz) or general vibrations.
+<body class="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8">
+    <div class="bg-white p-6 sm:p-8 md:p-10 rounded-xl shadow-2xl w-full max-w-4xl text-center border border-gray-200">
+        <h1 class="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-6">
+            Advanced Audio Analyzer
+        </h1>
+        <p class="text-lg text-gray-600 mb-8">
+            Upload your audio file (.wav, .mp3, .ogg) for detailed analysis.
         </p>
 
-        <button id="toggleAnalysisBtn"
-                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 mb-6">
-            Start Analysis
+        <!-- File Upload Area -->
+        <div id="dropArea"
+             class="drop-area p-8 rounded-lg cursor-pointer mb-8 transition-all duration-300 ease-in-out
+                    hover:border-blue-500 hover:bg-blue-50">
+            <input type="file" id="audioFile" accept=".wav, .mp3, .ogg" class="hidden">
+            <p class="text-gray-700 text-lg font-semibold mb-2">Drag & Drop Audio File Here</p>
+            <p class="text-gray-500 text-sm">or click to browse</p>
+            <p class="text-gray-400 text-xs mt-2">Supported formats: .wav, .mp3, .ogg</p>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="hidden flex items-center justify-center mb-8 text-blue-600">
+            <svg class="animate-spin h-8 w-8 mr-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-xl font-medium">Analyzing audio...</span>
+        </div>
+
+        <!-- Error Message Box -->
+        <div id="errorBox" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md hidden mb-8" role="alert">
+            <p id="errorMessage"></p>
+        </div>
+
+        <!-- Audio Visualizations -->
+        <div id="visualizations" class="hidden mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Visualizations</h2>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Waveform:</h3>
+                <div id="waveform" class="w-full rounded-lg shadow-md"></div>
+            </div>
+            <div>
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Spectrogram:</h3>
+                <canvas id="spectrogramCanvas" class="w-full rounded-lg shadow-md"></canvas>
+            </div>
+        </div>
+
+        <!-- Analysis Results -->
+        <div id="analysisResults" class="hidden text-left mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Analysis Results</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Client-Side Results -->
+                <div class="bg-blue-50 p-6 rounded-lg shadow-sm border border-blue-200">
+                    <h3 class="text-xl font-semibold text-blue-800 mb-3">Client-Side Metrics (Basic)</h3>
+                    <div class="flex items-center mb-2">
+                        <span class="font-medium w-32">Loudness (RMS):</span>
+                        <span id="rmsValue" class="text-lg font-bold text-blue-700">-</span>
+                    </div>
+                    <p class="text-sm text-blue-600 mt-2">
+                        *Calculated directly in your browser. For more advanced metrics like LUFS, SNR, and specific frequency checks, a backend server is required.
+                    </p>
+                </div>
+
+                <!-- Backend-Awaited Results Placeholder -->
+                <div class="bg-purple-50 p-6 rounded-lg shadow-sm border border-purple-200">
+                    <h3 class="text-xl font-semibold text-purple-800 mb-3">Advanced Metrics (Simulated)</h3>
+                    <div class="mb-2">
+                        <span class="font-medium w-32">Voice Presence:</span>
+                        <span id="voicePresence" class="text-lg font-bold text-purple-700">-</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="font-medium w-32">Loudness (LUFS):</span>
+                        <span id="lufsValue" class="text-lg font-bold text-purple-700">-</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="font-medium w-32">Clarity (SNR):</span>
+                        <span id="snrValue" class="text-lg font-bold text-purple-700">-</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="font-medium w-32">Dynamic Range:</span>
+                        <span id="dynamicRange" class="text-lg font-bold text-purple-700">-</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="font-medium w-32">Hum (50/60Hz):</span>
+                        <span id="humCheck" class="text-lg font-bold text-purple-700">-</span>
+                    </div>
+                    <!-- Optional: Transcribe and check pronunciation/pace for voice acting -->
+                    <div class="mb-2">
+                        <span class="font-medium w-32">Transcription:</span>
+                        <span id="transcription" class="text-lg font-bold text-purple-700">-</span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="font-medium w-32">Pronunciation/Pace:</span>
+                        <span id="pronunciationPace" class="text-lg font-bold text-purple-700">-</span>
+                    </div>
+                    <p class="text-sm text-purple-600 mt-2">
+                        *These results are simulated for demonstration. Full, accurate analysis of these metrics requires a dedicated backend server with specialized audio processing libraries.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">Overall Score & Status:</h3>
+                <p id="overallStatus" class="text-3xl font-extrabold text-gray-900">-</p>
+                <p id="statusReason" class="text-gray-600 mt-2">-</p>
+            </div>
+        </div>
+
+        <!-- Report Download Button -->
+        <button id="downloadReportBtn"
+                class="hidden bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 mt-8">
+            Download PDF Report (Placeholder)
         </button>
 
-        <div id="messageBox" class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-md mb-6 hidden" role="alert">
-            <p id="messageText"></p>
-        </div>
-
-        <div class="mb-6">
-            <h2 class="text-xl sm:text-2xl font-semibold text-gray-700 mb-3">Detected Noise:</h2>
-            <p id="noiseType" class="text-2xl sm:text-3xl font-extrabold text-indigo-700">None</p>
-            <p id="frequencyInfo" class="text-gray-500 text-sm mt-1"></p>
-        </div>
-
-        <canvas id="audioVisualizer" class="w-full h-48 sm:h-64"></canvas>
-
-        <div class="mt-6 text-sm text-gray-500">
-            <p>Note: For accurate analysis, ensure a quiet environment or isolate the noise source.</p>
+        <div class="mt-8 text-sm text-gray-500">
+            <p>This application runs entirely in your browser. Advanced analysis features are simulated.</p>
         </div>
     </div>
 
     <script>
-        // Global variables for audio context and analyzer
-        let audioContext;
-        let analyser;
-        let microphone;
-        let animationFrameId;
-        let isAnalyzing = false;
-        let dataArray;
-        let bufferLength;
+        // --- UI Elements ---
+        const dropArea = document.getElementById('dropArea');
+        const audioFile = document.getElementById('audioFile');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorBox = document.getElementById('errorBox');
+        const errorMessage = document.getElementById('errorMessage');
+        const visualizationsDiv = document.getElementById('visualizations');
+        const waveformDiv = document.getElementById('waveform');
+        const spectrogramCanvas = document.getElementById('spectrogramCanvas');
+        const analysisResultsDiv = document.getElementById('analysisResults');
+        const rmsValueSpan = document.getElementById('rmsValue');
+        const lufsValueSpan = document.getElementById('lufsValue');
+        const snrValueSpan = document.getElementById('snrValue');
+        const dynamicRangeSpan = document.getElementById('dynamicRange');
+        const humCheckSpan = document.getElementById('humCheck');
+        const voicePresenceSpan = document.getElementById('voicePresence');
+        const transcriptionSpan = document.getElementById('transcription');
+        const pronunciationPaceSpan = document.getElementById('pronunciationPace');
+        const overallStatusP = document.getElementById('overallStatus');
+        const statusReasonP = document.getElementById('statusReason');
+        const downloadReportBtn = document.getElementById('downloadReportBtn');
 
-        // UI elements
-        const toggleAnalysisBtn = document.getElementById('toggleAnalysisBtn');
-        const noiseTypeDisplay = document.getElementById('noiseType');
-        const frequencyInfoDisplay = document.getElementById('frequencyInfo');
-        const audioVisualizer = document.getElementById('audioVisualizer');
-        const messageBox = document.getElementById('messageBox');
-        const messageText = document.getElementById('messageText');
-        const canvasCtx = audioVisualizer.getContext('2d');
+        // --- Wavesurfer.js Instance ---
+        let wavesurfer = null;
 
-        // Function to show messages to the user
-        function showMessage(message, type = 'info') {
-            messageText.textContent = message;
-            messageBox.classList.remove('hidden');
-            if (type === 'error') {
-                messageBox.classList.remove('bg-yellow-100', 'border-yellow-400', 'text-yellow-700');
-                messageBox.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
-            } else {
-                messageBox.classList.remove('bg-red-100', 'border-red-400', 'text-red-700');
-                messageBox.classList.add('bg-yellow-100', 'border-yellow-400', 'text-yellow-700');
+        // --- Web Audio API Context ---
+        let audioContext = null;
+        let analyser = null;
+        let sourceNode = null;
+        let spectrogramAnimationFrameId = null;
+
+        // --- Helper Functions ---
+        function showElement(element) { element.classList.remove('hidden'); }
+        function hideElement(element) { element.classList.add('hidden'); }
+        function showError(message) {
+            errorMessage.textContent = message;
+            showElement(errorBox);
+            hideElement(loadingIndicator);
+            hideElement(visualizationsDiv);
+            hideElement(analysisResultsDiv);
+            hideElement(downloadReportBtn);
+        }
+        function clearResults() {
+            rmsValueSpan.textContent = '-';
+            lufsValueSpan.textContent = '-';
+            snrValueSpan.textContent = '-';
+            dynamicRangeSpan.textContent = '-';
+            humCheckSpan.textContent = '-';
+            voicePresenceSpan.textContent = '-';
+            transcriptionSpan.textContent = '-';
+            pronunciationPaceSpan.textContent = '-';
+            overallStatusP.textContent = '-';
+            statusReasonP.textContent = '-';
+            hideElement(visualizationsDiv);
+            hideElement(analysisResultsDiv);
+            hideElement(downloadReportBtn);
+            hideElement(errorBox);
+        }
+
+        // --- File Handling ---
+        dropArea.addEventListener('click', () => audioFile.click());
+        audioFile.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
             }
-        }
+        });
 
-        // Function to hide messages
-        function hideMessage() {
-            messageBox.classList.add('hidden');
-        }
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('highlight');
+        });
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('highlight');
+        });
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('highlight');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
 
-        // Function to start audio analysis
-        async function startAnalysis() {
-            if (isAnalyzing) return; // Prevent multiple starts
+        async function handleFile(file) {
+            clearResults();
+            showElement(loadingIndicator);
+
+            if (!file.type.startsWith('audio/')) {
+                showError('Invalid file type. Please upload an audio file (.wav, .mp3, .ogg).');
+                return;
+            }
 
             try {
-                // Request microphone access
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                showMessage('Microphone access granted. Starting analysis...');
+                // Initialize AudioContext if not already
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
 
-                // Create AudioContext and connect nodes
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // Stop previous audio if playing/analyzing
+                if (sourceNode) {
+                    sourceNode.stop();
+                    sourceNode.disconnect();
+                    sourceNode = null;
+                }
+                if (analyser) {
+                    analyser.disconnect();
+                    analyser = null;
+                }
+                if (spectrogramAnimationFrameId) {
+                    cancelAnimationFrame(spectrogramAnimationFrameId);
+                    spectrogramAnimationFrameId = null;
+                }
+
+                // Decode audio for Web Audio API processing
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // --- Waveform Visualization (Wavesurfer.js) ---
+                if (wavesurfer) {
+                    wavesurfer.destroy(); // Clean up previous instance
+                }
+                wavesurfer = WavesSurfer.create({
+                    container: '#waveform',
+                    waveColor: '#60a5fa', // Blue-400
+                    progressColor: '#3b82f6', // Blue-500
+                    cursorColor: '#93c5fd', // Blue-300
+                    barWidth: 2,
+                    barGap: 1,
+                    barRadius: 2,
+                    height: 120,
+                    minPxPerSec: 10,
+                    fillParent: true,
+                    responsive: true,
+                    backend: 'WebAudio', // Use Web Audio API backend
+                    mediaControls: true, // Show play/pause controls
+                    dragToSeek: true,
+                    hideScrollbar: true,
+                });
+                wavesurfer.load(URL.createObjectURL(file));
+                wavesurfer.on('ready', () => {
+                    hideElement(loadingIndicator);
+                    showElement(visualizationsDiv);
+                    showElement(analysisResultsDiv); // Show results section
+                    // Start client-side analysis after waveform is ready
+                    performClientSideAnalysis(audioBuffer);
+                    // Trigger simulated backend analysis
+                    simulateBackendAnalysis();
+                });
+                wavesurfer.on('error', (err) => {
+                    showError(`Error loading audio for waveform: ${err.message}`);
+                });
+
+                // --- Spectrogram Visualization (Web Audio API) ---
                 analyser = audioContext.createAnalyser();
-                microphone = audioContext.createMediaStreamSource(stream);
+                analyser.fftSize = 2048; // Adjust for desired frequency resolution
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
 
-                microphone.connect(analyser);
-                analyser.fftSize = 2048; // Fast Fourier Transform size (power of 2)
-                bufferLength = analyser.frequencyBinCount; // Number of data points
-                dataArray = new Uint8Array(bufferLength); // Array to hold frequency data
+                sourceNode = audioContext.createBufferSource();
+                sourceNode.buffer = audioBuffer;
+                sourceNode.connect(analyser);
+                analyser.connect(audioContext.destination); // Connect to speakers to hear sound
 
-                isAnalyzing = true;
-                toggleAnalysisBtn.textContent = 'Stop Analysis';
-                toggleAnalysisBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-                toggleAnalysisBtn.classList.add('bg-red-600', 'hover:bg-red-700');
-                hideMessage(); // Hide initial message once analysis starts
+                sourceNode.start(0); // Start playing the audio
+                sourceNode.onended = () => {
+                    if (spectrogramAnimationFrameId) {
+                        cancelAnimationFrame(spectrogramAnimationFrameId);
+                    }
+                    if (analyser) {
+                        analyser.disconnect();
+                    }
+                    if (sourceNode) {
+                        sourceNode.disconnect();
+                    }
+                    console.log('Audio playback ended.');
+                };
 
-                // Start the visualization and analysis loop
-                draw();
+                drawSpectrogram(dataArray, bufferLength);
 
-            } catch (err) {
-                console.error('Error accessing microphone:', err);
-                showMessage('Error: Could not access microphone. Please ensure it is connected and grant permission.', 'error');
-                isAnalyzing = false; // Reset state if error occurs
-                toggleAnalysisBtn.textContent = 'Start Analysis'; // Reset button text
-                toggleAnalysisBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
-                toggleAnalysisBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            } catch (error) {
+                console.error('Error processing audio file:', error);
+                showError(`Failed to process audio file: ${error.message}. Make sure it's a valid audio format.`);
             }
         }
 
-        // Function to stop audio analysis
-        function stopAnalysis() {
-            if (!isAnalyzing) return;
+        // --- Spectrogram Drawing Function ---
+        function drawSpectrogram(dataArray, bufferLength) {
+            const canvasCtx = spectrogramCanvas.getContext('2d');
+            const width = spectrogramCanvas.clientWidth;
+            const height = spectrogramCanvas.clientHeight;
+            spectrogramCanvas.width = width;
+            spectrogramCanvas.height = height;
 
-            cancelAnimationFrame(animationFrameId); // Stop the animation loop
-
-            if (microphone) {
-                microphone.disconnect();
-                microphone.mediaStream.getTracks().forEach(track => track.stop()); // Stop microphone track
-            }
-            if (audioContext) {
-                audioContext.close(); // Close the audio context
-            }
-
-            isAnalyzing = false;
-            toggleAnalysisBtn.textContent = 'Start Analysis';
-            toggleAnalysisBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
-            toggleAnalysisBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-            noiseTypeDisplay.textContent = 'None';
-            frequencyInfoDisplay.textContent = '';
-            canvasCtx.clearRect(0, 0, audioVisualizer.width, audioVisualizer.height); // Clear canvas
-            showMessage('Analysis stopped. Click "Start Analysis" to restart.', 'info');
-        }
-
-        // Main drawing and analysis loop
-        function draw() {
-            animationFrameId = requestAnimationFrame(draw);
+            // Clear canvas
+            canvasCtx.clearRect(0, 0, width, height);
 
             // Get frequency data
             analyser.getByteFrequencyData(dataArray);
 
-            // Clear canvas
-            canvasCtx.clearRect(0, 0, audioVisualizer.width, audioVisualizer.height);
-
-            // Set canvas dimensions to match display size (important for responsiveness)
-            const width = audioVisualizer.clientWidth;
-            const height = audioVisualizer.clientHeight;
-            audioVisualizer.width = width;
-            audioVisualizer.height = height;
-
-            // Draw frequency bars
-            const barWidth = (width / bufferLength) * 2.5; // Adjusted bar width for better visualization
+            const barWidth = width / bufferLength;
             let x = 0;
 
             for (let i = 0; i < bufferLength; i++) {
-                const barHeight = dataArray[i] / 255 * height; // Scale height to canvas height
+                const value = dataArray[i]; // Value from 0-255
+                const percent = value / 255;
+                const barHeight = height * percent;
 
-                canvasCtx.fillStyle = `rgb(${dataArray[i]}, 50, 150)`; // Color based on frequency intensity
+                // Create a color gradient for better visualization
+                const hue = i / bufferLength * 360; // Map frequency to hue
+                canvasCtx.fillStyle = `hsl(${hue}, 100%, ${50 + percent * 20}%)`; // Adjust lightness based on amplitude
                 canvasCtx.fillRect(x, height - barHeight, barWidth, barHeight);
 
-                x += barWidth + 1;
+                x += barWidth;
             }
-
-            // Perform noise analysis
-            analyzeNoise();
+            spectrogramAnimationFrameId = requestAnimationFrame(() => drawSpectrogram(dataArray, bufferLength));
         }
 
-        // Function to analyze the noise based on frequency data
-        function analyzeNoise() {
-            if (!analyser || !dataArray || !audioContext) {
-                noiseTypeDisplay.textContent = 'Analyzing...';
-                frequencyInfoDisplay.textContent = '';
-                return;
+        // --- Client-Side Analysis (Basic RMS) ---
+        function performClientSideAnalysis(audioBuffer) {
+            // Simple RMS calculation
+            let sumOfSquares = 0;
+            const channelData = audioBuffer.getChannelData(0); // Get data from first channel
+
+            for (let i = 0; i < channelData.length; i++) {
+                sumOfSquares += channelData[i] * channelData[i];
             }
+            const rms = Math.sqrt(sumOfSquares / channelData.length);
+            const rmsDb = 20 * Math.log10(rms); // Convert to dBFS (relative to full scale)
 
-            const sampleRate = audioContext.sampleRate;
-            const frequencyBinWidth = sampleRate / analyser.fftSize; // Hz per data point
+            rmsValueSpan.textContent = `${rmsDb.toFixed(2)} dBFS`;
 
-            let detectedNoise = 'General Background Noise';
-            let info = '';
-
-            // Thresholds for detection (these may need fine-tuning based on environment)
-            const HUM_THRESHOLD = 180; // Amplitude threshold for hum detection
-            const VIBRATION_THRESHOLD = 150; // Amplitude threshold for low-frequency vibration
-            const MIN_VIBRATION_FREQ_RANGE = 20; // Hz
-            const MAX_VIBRATION_FREQ_RANGE = 200; // Hz
-
-            // Check for 50Hz/60Hz hum
-            const hum50HzIndex = Math.round(50 / frequencyBinWidth);
-            const hum60HzIndex = Math.round(60 / frequencyBinWidth);
-
-            const amplitude50Hz = dataArray[hum50HzIndex] || 0;
-            const amplitude60Hz = dataArray[hum60HzIndex] || 0;
-
-            if (amplitude60Hz > HUM_THRESHOLD) {
-                detectedNoise = 'Ground Hum (60Hz)';
-                info = `Amplitude: ${amplitude60Hz.toFixed(0)}`;
-            } else if (amplitude50Hz > HUM_THRESHOLD) {
-                detectedNoise = 'Ground Hum (50Hz)';
-                info = `Amplitude: ${amplitude50Hz.toFixed(0)}`;
+            // Set initial overall status based on client-side RMS (very basic)
+            if (rmsDb < -30) {
+                overallStatusP.textContent = 'Needs Improvement';
+                overallStatusP.classList.remove('text-green-700', 'text-red-700');
+                overallStatusP.classList.add('text-yellow-700');
+                statusReasonP.textContent = 'Audio seems very quiet. Consider increasing gain.';
+            } else if (rmsDb > -5) {
+                overallStatusP.textContent = 'Needs Improvement';
+                overallStatusP.classList.remove('text-green-700', 'text-yellow-700');
+                overallStatusP.classList.add('text-red-700');
+                statusReasonP.textContent = 'Audio might be too loud or clipping. Check for distortion.';
             } else {
-                // Check for general low-frequency vibration
-                let lowFreqEnergy = 0;
-                let lowFreqCount = 0;
-
-                const minVibrationIndex = Math.round(MIN_VIBRATION_FREQ_RANGE / frequencyBinWidth);
-                const maxVibrationIndex = Math.round(MAX_VIBRATION_FREQ_RANGE / frequencyBinWidth);
-
-                for (let i = minVibrationIndex; i <= maxVibrationIndex && i < bufferLength; i++) {
-                    lowFreqEnergy += dataArray[i];
-                    lowFreqCount++;
-                }
-
-                if (lowFreqCount > 0) {
-                    const averageLowFreqAmplitude = lowFreqEnergy / lowFreqCount;
-                    if (averageLowFreqAmplitude > VIBRATION_THRESHOLD) {
-                        detectedNoise = 'Vibration/Low-Frequency Rumble';
-                        info = `Average Amplitude (${MIN_VIBRATION_FREQ_RANGE}-${MAX_VIBRATION_FREQ_RANGE}Hz): ${averageLowFreqAmplitude.toFixed(0)}`;
-                    }
-                }
+                overallStatusP.textContent = 'Good (Client-side RMS)';
+                overallStatusP.classList.remove('text-yellow-700', 'text-red-700');
+                overallStatusP.classList.add('text-green-700');
+                statusReasonP.textContent = 'RMS level appears acceptable. Further analysis would require a backend.';
             }
-
-            // Update UI
-            noiseTypeDisplay.textContent = detectedNoise;
-            frequencyInfoDisplay.textContent = info;
         }
 
-        // Event listener for the toggle button
-        toggleAnalysisBtn.addEventListener('click', () => {
-            if (isAnalyzing) {
-                stopAnalysis();
+        // --- Simulated Backend Analysis (for GitHub Pages) ---
+        function simulateBackendAnalysis() {
+            // Simulate a delay for "backend" processing
+            setTimeout(() => {
+                const mockBackendData = {
+                    lufs: -20.5,
+                    snr: 35.2,
+                    dynamic_range: 15.8,
+                    hum_detected: false,
+                    voice_presence: 0.85,
+                    hum_frequency: null,
+                    transcription: "This is a sample audio recording for analysis.",
+                    pronunciation_pace: "Good (150 WPM)",
+                    overall_status: "Pass",
+                    status_reason: "Simulated: All key metrics within acceptable ranges.",
+                };
+
+                lufsValueSpan.textContent = mockBackendData.lufs ? `${mockBackendData.lufs.toFixed(2)} LUFS` : '-';
+                snrValueSpan.textContent = mockBackendData.snr ? `${mockBackendData.snr.toFixed(2)} dB` : '-';
+                dynamicRangeSpan.textContent = mockBackendData.dynamic_range ? `${mockBackendData.dynamic_range.toFixed(2)} dB` : '-';
+                humCheckSpan.textContent = mockBackendData.hum_detected ? `Detected (${mockBackendData.hum_frequency}Hz)` : 'None';
+                voicePresenceSpan.textContent = mockBackendData.voice_presence ? `${(mockBackendData.voice_presence * 100).toFixed(1)}%` : '-';
+                transcriptionSpan.textContent = mockBackendData.transcription || '-';
+                pronunciationPaceSpan.textContent = mockBackendData.pronunciation_pace || '-';
+
+                updateOverallStatus(mockBackendData);
+                showElement(downloadReportBtn);
+            }, 2000); // Simulate 2-second processing delay
+        }
+
+        // --- Update Overall Status based on (Simulated) Data ---
+        function updateOverallStatus(data) {
+            const status = data.overall_status;
+            overallStatusP.textContent = status;
+            statusReasonP.textContent = data.status_reason || '';
+
+            overallStatusP.classList.remove('text-green-700', 'text-yellow-700', 'text-red-700');
+            if (status === 'Pass') {
+                overallStatusP.classList.add('text-green-700');
+            } else if (status === 'Needs Improvement') {
+                overallStatusP.classList.add('text-yellow-700');
+            } else if (status === 'Fail') {
+                overallStatusP.classList.add('text-red-700');
             } else {
-                startAnalysis();
+                overallStatusP.classList.add('text-gray-900'); // Default
             }
+        }
+
+        // --- Download Report (Placeholder) ---
+        downloadReportBtn.addEventListener('click', () => {
+            // For a GitHub Pages only solution, PDF generation would be client-side.
+            // A simple approach could be to use jsPDF to generate a basic report
+            // based on the displayed (mocked) data.
+            alert('PDF Report download functionality is a placeholder. A full report would require more advanced client-side PDF generation or a backend service.');
         });
 
-        // Initialize message on load
+        // --- Initial State ---
         window.onload = () => {
-            showMessage('Click "Start Analysis" to begin.');
+            clearResults();
+            hideElement(loadingIndicator);
+            hideElement(visualizationsDiv);
+            hideElement(analysisResultsDiv);
+            hideElement(downloadReportBtn);
+            hideElement(errorBox);
         };
 
-        // Handle window resize to make canvas responsive
+        // Handle window resize for canvas responsiveness (spectrogram only)
         window.addEventListener('resize', () => {
-            if (isAnalyzing) {
-                // Redraw to adjust to new size
-                draw();
-            } else {
-                // Clear and reset canvas size when not analyzing
-                const width = audioVisualizer.clientWidth;
-                const height = audioVisualizer.clientHeight;
-                audioVisualizer.width = width;
-                audioVisualizer.height = height;
-                canvasCtx.clearRect(0, 0, width, height);
+            if (analyser && sourceNode && sourceNode.buffer) {
+                // Redraw spectrogram if audio is loaded
+                if (spectrogramAnimationFrameId) {
+                    cancelAnimationFrame(spectrogramAnimationFrameId);
+                }
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                drawSpectrogram(dataArray, bufferLength);
             }
         });
-
     </script>
 </body>
 </html>
