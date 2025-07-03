@@ -153,6 +153,20 @@ async function analyzeAudio() {
         await new Promise(r => setTimeout(r, 10));
       }
 
+      // 🔍 Echo detection
+      let echo = false;
+      const maxLag = Math.floor(audioCtx.sampleRate * 0.05); // up to 50ms delay
+      let echoScore = 0;
+      for (let lag = Math.floor(audioCtx.sampleRate * 0.02); lag < maxLag; lag += 100) {
+        let sum = 0;
+        for (let i = 0; i < channelData.length - lag; i += 1000) {
+          sum += channelData[i] * channelData[i + lag];
+        }
+        echoScore = Math.max(echoScore, sum);
+      }
+      if (echoScore > 100) echo = true;
+
+      // 🧾 Final Result
       loading.classList.add("hidden");
       progressWrapper.classList.add("hidden");
       progressBar.style.width = "0%";
@@ -161,13 +175,16 @@ async function analyzeAudio() {
       if (hum) issues.push("⚠️ Hum detected");
       if (buzz) issues.push("⚠️ Buzz detected");
       if (plosive) issues.push("⚠️ Plosive detected");
+      if (echo) issues.push("⚠️ Echo detected");
       if (issues.length === 0) issues.push("✅ Clean recording");
+
+      const hasProblem = hum || buzz || plosive || echo;
 
       result.classList.remove("hidden");
       result.innerHTML = `
         <p><b>Noise Analysis:</b><br>${issues.join("<br>")}</p>
-        <p><b>Result:</b> <span class="${hum || buzz || plosive ? 'fail' : 'pass'}">
-          ${hum || buzz || plosive ? "❌ FAIL" : "✅ PASS"}
+        <p><b>Result:</b> <span class="${hasProblem ? 'fail' : 'pass'}">
+          ${hasProblem ? "❌ FAIL" : "✅ PASS"}
         </span></p>
       `;
     });
