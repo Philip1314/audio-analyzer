@@ -1,3 +1,10 @@
+// Only run on GitHub Pages
+if (!location.hostname.endsWith("github.io")) {
+  alert("This app only works on GitHub Pages.");
+  document.body.innerHTML = "<h2 style='color:red;text-align:center;'>⛔ This app only runs on GitHub Pages.</h2>";
+  throw new Error("Blocked: Not on GitHub Pages.");
+}
+
 function showFileName() {
   const fileInput = document.getElementById("audioFile");
   const fileNameDiv = document.getElementById("fileName");
@@ -77,7 +84,7 @@ function drawSpectrogram(channelData, sampleRate) {
     for (let y = 0; y < height; y++) {
       const i = Math.floor((y / height) * spectrum.length);
       const mag = spectrum[i];
-      const intensity = Math.min(255, Math.floor(mag * 0.5));
+      const intensity = Math.min(255, Math.floor(mag * 5));
       const pixelIndex = ((height - y - 1) * width + x) * 4;
       imageData.data[pixelIndex + 0] = intensity;
       imageData.data[pixelIndex + 1] = intensity * 0.7;
@@ -113,23 +120,27 @@ function analyzeAudio() {
       drawWaveform(channelData);
       drawSpectrogram(channelData, audioCtx.sampleRate);
 
+      const chunkSize = 8192;
       let hum = false, buzz = false, plosive = false;
-      const fft = new Float32Array(8192);
-      for (let i = 0; i < fft.length; i++) fft[i] = channelData[i] || 0;
 
-      for (let k = 0; k < fft.length / 2; k++) {
-        let re = 0, im = 0;
-        for (let n = 0; n < fft.length; n++) {
-          const angle = (2 * Math.PI * k * n) / fft.length;
-          re += fft[n] * Math.cos(angle);
-          im -= fft[n] * Math.sin(angle);
+      for (let offset = 0; offset + chunkSize < channelData.length; offset += chunkSize * 4) {
+        const fft = new Float32Array(chunkSize);
+        for (let i = 0; i < chunkSize; i++) fft[i] = channelData[offset + i] || 0;
+
+        for (let k = 0; k < chunkSize / 2; k++) {
+          let re = 0, im = 0;
+          for (let n = 0; n < chunkSize; n++) {
+            const angle = (2 * Math.PI * k * n) / chunkSize;
+            re += fft[n] * Math.cos(angle);
+            im -= fft[n] * Math.sin(angle);
+          }
+          const mag = Math.sqrt(re * re + im * im);
+          const freq = k * audioCtx.sampleRate / chunkSize;
+
+          if (freq >= 48 && freq <= 52 && mag > 0.01) hum = true;
+          if (freq >= 2000 && freq <= 4000 && mag > 0.01) buzz = true;
+          if (freq >= 80 && freq <= 150 && mag > 0.01) plosive = true;
         }
-        const mag = Math.sqrt(re * re + im * im);
-        const freq = k * audioCtx.sampleRate / fft.length;
-
-        if (freq >= 48 && freq <= 52 && mag > 100) hum = true;
-        if (freq >= 2000 && freq <= 4000 && mag > 120) buzz = true;
-        if (freq >= 80 && freq <= 150 && mag > 160) plosive = true;
       }
 
       let issues = [];
