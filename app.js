@@ -46,6 +46,46 @@ function drawWaveform(data) {
   ctx.stroke();
 }
 
+function drawSpectrogram(buffer, sampleRate) {
+  const fftSize = 512;
+  const canvas = document.getElementById("spectrogramCanvas");
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width = canvas.offsetWidth;
+  const height = canvas.height = 150;
+  canvas.classList.remove("hidden");
+
+  const analyser = new OfflineAudioContext(1, buffer.length, sampleRate)
+    .createAnalyser();
+  analyser.fftSize = fftSize;
+  const binCount = analyser.frequencyBinCount;
+  const spectrogramData = new Uint8Array(binCount);
+
+  const step = Math.floor(buffer.length / width);
+  ctx.clearRect(0, 0, width, height);
+
+  for (let x = 0; x < width; x++) {
+    const offset = x * step;
+    const slice = buffer.slice(offset, offset + fftSize);
+    const audioCtx = new OfflineAudioContext(1, fftSize, sampleRate);
+    const src = audioCtx.createBufferSource();
+    const tempBuf = audioCtx.createBuffer(1, fftSize, sampleRate);
+    tempBuf.copyToChannel(slice, 0);
+    src.buffer = tempBuf;
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    src.start();
+
+    audioCtx.startRendering().then(() => {
+      analyser.getByteFrequencyData(spectrogramData);
+      for (let y = 0; y < height; y++) {
+        const v = spectrogramData[Math.floor(y / height * binCount)];
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(x, height - y, 1, 1);
+      }
+    });
+  }
+}
+
 async function analyzeAudio() {
   const input = document.getElementById("audioFile");
   const result = document.getElementById("result");
@@ -66,51 +106,45 @@ async function analyzeAudio() {
   reader.onload = function (e) {
     audioCtx.decodeAudioData(e.target.result, async (buffer) => {
       const data = buffer.getChannelData(0);
-      drawWaveform(data);
-
       const sampleRate = buffer.sampleRate;
-      const totalChunks = Math.floor(data.length / 8192);
-      let hum = false, buzz = false, plosive = false, backgroundNoise = false, lowRMS = false;
+      drawWaveform(data);
+      drawSpectrogram(data, sampleRate);
 
-      // For scoring
-      let silentGaps = 0, totalEnergy = 0, peakEnergy = 0;
-      let variation = 0, lastAmp = 0;
+      const totalSamples = data.length;
+      const windowSize = 2048;
+      let hum = false, buzz = false, plosive = false;
+      let backgroundNoise = false, lowRMS = false;
       let echo = false, echoScore = 0;
 
-      for (let c = 0; c < totalChunks; c++) {
-        const chunk = data.slice(c * 8192, (c + 1) * 8192);
+      let silentGaps = 0, variation = 0, lastAmp = 0, peakEnergy = 0;
+
+      for (let i = 0; i < totalSamples; i += windowSize) {
+        const slice = data.slice(i, i + windowSize);
         let sum = 0;
         let peak = 0;
 
-        for (let i = 0; i < chunk.length; i++) {
-          const val = chunk[i];
+        for (let j = 0; j < slice.length; j++) {
+          const val = slice[j];
           sum += val * val;
           peak = Math.max(peak, Math.abs(val));
           variation += Math.abs(val - lastAmp);
           lastAmp = val;
         }
 
-        const rms = Math.sqrt(sum / chunk.length);
-        totalEnergy += rms;
-        peakEnergy = Math.max(peakEnergy, peak);
-
-        // Detect background noise on silence
+        const rms = Math.sqrt(sum / slice.length);
         if (rms < 0.01 && peak > 0.02) silentGaps++;
         if (rms > 0.2) backgroundNoise = true;
         if (rms < 0.01) lowRMS = true;
+        peakEnergy = Math.max(peakEnergy, peakEnergy, peak);
 
-        // FFT-based heuristics (optional improvements can be added later)
-        // Simulated checks for known problems
-        if (c === 0) {
-          hum = data.some(v => Math.abs(v) > 0.005 && Math.abs(v) < 0.02);
-          buzz = data.some(v => Math.abs(v) > 0.03 && Math.abs(v) < 0.05);
-          plosive = data.some(v => Math.abs(v) > 0.6);
-        }
+        if (!hum && slice.some(v => Math.abs(v) > 0.005 && Math.abs(v) < 0.02)) hum = true;
+        if (!buzz && slice.some(v => Math.abs(v) > 0.03 && Math.abs(v) < 0.05)) buzz = true;
+        if (!plosive && slice.some(v => Math.abs(v) > 0.6)) plosive = true;
 
-        const percent = Math.floor((c / totalChunks) * 100);
+        const percent = Math.floor((i / totalSamples) * 100);
         loading.textContent = `🔍 Analyzing... ${percent}%`;
         progressBar.style.width = `${percent}%`;
-        await new Promise(r => setTimeout(r, 5));
+        await new Promise(r => setTimeout(r, 1));
       }
 
       // Echo detection via autocorrelation
@@ -124,7 +158,7 @@ async function analyzeAudio() {
       }
       if (echoScore > 100) echo = true;
 
-      // Calculate scores
+      // 🎯 Scoring
       const qualityScore = Math.max(1, 5 - (
         (hum ? 1 : 0) +
         (buzz ? 1 : 0) +
@@ -135,24 +169,29 @@ async function analyzeAudio() {
 
       let naturalScore = 5;
       if (silentGaps > 5) naturalScore -= 1;
-      if (variation < 1.0) naturalScore -= 1; // monotone
-      if (peakEnergy > 0.9) naturalScore -= 1; // overacting
+      if (variation < 1.0) naturalScore -= 1;
+      if (peakEnergy > 0.9) naturalScore -= 1;
       if (echo) naturalScore -= 1;
 
-      // Interpret naturalness comments
-      let naturalnessComments = [];
+      const naturalnessComments = [];
       if (silentGaps > 5) naturalnessComments.push("⚠️ Awkward pacing");
       if (variation < 1.0) naturalnessComments.push("⚠️ Monotone delivery");
       if (peakEnergy > 0.9) naturalnessComments.push("⚠️ Overacting or excessive loudness");
       if (naturalnessComments.length === 0) naturalnessComments.push("✅ Natural sounding voice");
 
-      // Clean up UI
+      const suggestions = [];
+      if (qualityScore <= 2) suggestions.push("🎧 Try improving your recording setup — reduce background noise or hum.");
+      if (naturalScore <= 2) suggestions.push("🗣️ Practice speaking with more variation in pitch and emotion.");
+      if (echo) suggestions.push("🚪 Reduce echo by using soft surroundings or an isolation box.");
+      if (plosive) suggestions.push("💨 Use a pop filter to reduce harsh 'P' or 'T' sounds.");
+      if (lowRMS) suggestions.push("🔈 Increase your microphone gain or speak louder.");
+
+      const failClass = (s) => s <= 2 ? 'fail' : 'pass';
+
       loading.classList.add("hidden");
       progressWrapper.classList.add("hidden");
       progressBar.style.width = "0%";
       result.classList.remove("hidden");
-
-      const failClass = (s) => s <= 2 ? 'fail' : 'pass';
 
       result.innerHTML = `
         <h3>🔊 Audio Quality Score: <span class="${failClass(qualityScore)}">${qualityScore}/5</span></h3>
@@ -171,6 +210,8 @@ async function analyzeAudio() {
         <p><b>🗣️ Voice Naturalness:</b><br>
           ${naturalnessComments.join("<br>")}
         </p>
+
+        ${suggestions.length > 0 ? `<p><b>💡 Suggestions:</b><br>${suggestions.join("<br>")}</p>` : ""}
       `;
     });
   };
