@@ -1,4 +1,4 @@
-// ✅ Allow only on GitHub Pages
+// Only run on GitHub Pages
 if (!location.hostname.endsWith("github.io")) {
   alert("This app only works on GitHub Pages.");
   document.body.innerHTML = "<h2 style='color:red;text-align:center;'>⛔ This app only runs on GitHub Pages.</h2>";
@@ -63,7 +63,6 @@ function drawSpectrogram(channelData, sampleRate) {
   const step = sliceSize;
   let offset = 0;
   const buffer = channelData.slice(0);
-
   ctx.clearRect(0, 0, width, height);
   const imageData = ctx.createImageData(width, height);
   let x = 0;
@@ -104,12 +103,15 @@ async function analyzeAudio() {
   const file = fileInput.files[0];
   const loading = document.getElementById("loading");
   const result = document.getElementById("result");
+  const progressWrapper = document.getElementById("progressWrapper");
+  const progressBar = document.getElementById("progressBar");
 
   if (!file) return alert("Please upload an audio file.");
 
   result.classList.add("hidden");
   loading.classList.remove("hidden");
   loading.textContent = "🔍 Analyzing... 0%";
+  progressWrapper.classList.remove("hidden");
 
   const reader = new FileReader();
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -145,13 +147,15 @@ async function analyzeAudio() {
           if (freq >= 80 && freq <= 150 && mag > 0.01) plosive = true;
         }
 
-        // 🔄 Update progress
         const percent = Math.floor((c / totalChunks) * 100);
         loading.textContent = `🔍 Analyzing... ${percent}%`;
-
-        // Allow UI to update
+        progressBar.style.width = `${percent}%`;
         await new Promise(r => setTimeout(r, 10));
       }
+
+      loading.classList.add("hidden");
+      progressWrapper.classList.add("hidden");
+      progressBar.style.width = "0%";
 
       let issues = [];
       if (hum) issues.push("⚠️ Hum detected");
@@ -159,7 +163,6 @@ async function analyzeAudio() {
       if (plosive) issues.push("⚠️ Plosive detected");
       if (issues.length === 0) issues.push("✅ Clean recording");
 
-      loading.classList.add("hidden");
       result.classList.remove("hidden");
       result.innerHTML = `
         <p><b>Noise Analysis:</b><br>${issues.join("<br>")}</p>
