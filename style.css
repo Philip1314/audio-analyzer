@@ -48,8 +48,25 @@ canvas {
 }
 
 #loading {
-  color: #777;
+  color: #555;
   font-style: italic;
+  margin-top: 10px;
+}
+
+#progressWrapper {
+  width: 100%;
+  background: #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  height: 16px;
+  margin: 10px 0;
+}
+
+#progressBar {
+  width: 0%;
+  height: 100%;
+  background-color: #005eff;
+  transition: width 0.2s;
 }
 
 .pass {
