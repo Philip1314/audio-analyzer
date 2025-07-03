@@ -1,77 +1,63 @@
 body {
-  font-family: sans-serif;
-  background: #f5f7fa;
-  color: #222;
-  margin: 0;
-  padding: 0;
-}
-
-.container {
+  font-family: Arial, sans-serif;
   max-width: 600px;
   margin: auto;
   padding: 20px;
+  background: #f4f7fa;
+  color: #333;
+}
+
+h1, h3 {
   text-align: center;
 }
 
-h1 {
-  margin-bottom: 1rem;
-}
-
 input[type="file"] {
-  margin-bottom: 10px;
-}
-
-audio {
-  width: 100%;
-  margin: 10px 0;
+  display: block;
+  margin: 15px auto;
 }
 
 button {
-  padding: 10px 20px;
-  font-size: 1em;
   background: #005eff;
   color: white;
+  padding: 10px 20px;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
+  font-size: 16px;
+  display: block;
+  margin: 10px auto;
   cursor: pointer;
 }
 
 button:hover {
-  background: #0041cc;
+  background: #0042cc;
 }
 
 canvas {
-  display: block;
   width: 100%;
-  margin: 20px auto;
+  margin-top: 10px;
+  background: #fff;
   border: 1px solid #ccc;
+  border-radius: 4px;
 }
 
-#loading {
-  color: #555;
-  font-style: italic;
-  margin-top: 10px;
+.hidden {
+  display: none;
 }
 
 #progressWrapper {
   width: 100%;
   background: #ddd;
-  border-radius: 8px;
+  border-radius: 4px;
+  height: 10px;
+  margin-top: 10px;
   overflow: hidden;
-  height: 16px;
-  margin: 10px 0;
 }
 
 #progressBar {
   width: 0%;
   height: 100%;
-  background-color: #005eff;
-  transition: width 0.2s;
-}
-
-.pass {
-  color: green;
-  font-weight: bold;
+  background: #0077ff;
+  transition: width 0.3s ease;
 }
 
 .fail {
@@ -79,12 +65,29 @@ canvas {
   font-weight: bold;
 }
 
-.hidden {
-  display: none;
+.pass {
+  color: green;
+  font-weight: bold;
 }
 
-footer {
-  margin-top: 30px;
-  color: #888;
-  font-size: 0.8em;
+#audioPlayer {
+  width: 100%;
+  margin: 10px 0;
+}
+
+#fileName {
+  text-align: center;
+  color: #555;
+}
+
+#result {
+  background: #fff;
+  padding: 15px;
+  margin-top: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+p {
+  line-height: 1.5;
 }
